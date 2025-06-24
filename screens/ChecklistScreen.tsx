@@ -1,69 +1,103 @@
-import React from 'react';
-import { View, Text, StatusBar, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import React, { useState, useEffect, useContext } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { QuizContext } from '../QuizContext';
+import TrackPlayer, { usePlaybackState, State } from 'react-native-track-player';
+import { setupPlayer, addTrack } from '../services/trackPlayerService';
 
-const ANSWERS = [
-  'Stay With Me',
-  "You're Gone",
-  'I Need You to Stay',
-  'She',
-];
+interface ITunesTrack {
+  trackId: number;
+  trackName: string;
+  artistName: string;
+  artworkUrl100: string;
+  previewUrl: string;
+}
 
-function ChecklistScreen() {
-  return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
-      <StatusBar barStyle="dark-content" />
-      <View style={{ marginTop: 60, alignItems: 'center' }}>
-        <Text style={{ fontSize: 28, color: '#888', fontWeight: '500', textAlign: 'center' }}>Questions</Text>
-        <Text style={{ fontSize: 28, color: '#888', fontWeight: '500', textAlign: 'center', marginBottom: 0 }}>Remaining:</Text>
-        <Text style={{ fontSize: 32, color: '#888', fontWeight: '400', marginTop: 12, marginBottom: 32 }}>16</Text>
-        {ANSWERS.map((ans, idx) => (
-          <TouchableOpacity
-            key={ans}
-            style={{
-              width: Dimensions.get('window').width - 48,
-              backgroundColor: '#fff',
-              borderRadius: 16,
-              borderWidth: 1,
-              borderColor: '#ddd',
-              paddingVertical: 18,
-              marginBottom: 18,
-              alignItems: 'center',
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={{ fontSize: 20, color: '#222', fontWeight: '500' }}>{ans}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <View style={{ position: 'absolute', bottom: 48, left: 0, right: 0, alignItems: 'center' }}>
-        <TouchableOpacity
-          style={{
-            width: 90,
-            height: 90,
-            borderRadius: 45,
-            backgroundColor: '#f88',
-            borderWidth: 3,
-            borderColor: '#222',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-          activeOpacity={0.7}
-        >
-          <View style={{
-            width: 0,
-            height: 0,
-            borderTopWidth: 22,
-            borderBottomWidth: 22,
-            borderLeftWidth: 38,
-            borderTopColor: 'transparent',
-            borderBottomColor: 'transparent',
-            borderLeftColor: '#fff',
-            marginLeft: 6,
-          }} />
-        </TouchableOpacity>
-      </View>
+const ChecklistScreen = () => {
+  const [screen, setScreen] = useState('start');
+  const [tracks, setTracks] = useState<ITunesTrack[]>([]);
+  const handleStartQuiz = async () => {
+    setScreen('question');
+  };
+  useEffect(() => {
+    const loadTracks = async () => {
+      const topTracks = await getTop80sTracks();
+      setTracks(topTracks);
+    };
+    loadTracks();
+    console.log(tracks);
+  }, []);
+  const playPreview = async (track: ITunesTrack) => {
+    await TrackPlayer.reset();
+    await TrackPlayer.add({
+      id: track.trackId.toString(),
+      url: track.previewUrl,
+      title: track.trackName,
+      artist: track.artistName,
+    });
+    await TrackPlayer.play();
+  };
+  const getTop80sTracks = async (): Promise<ITunesTrack[]> => {
+    const response = await fetch(`https://itunes.apple.com/search?term=1980s&entity=song&limit=50`);
+    const data = await response.json();
+    return data.results;
+  };
+  const renderStartScreen = () => (
+    <View style={styles.container}>
+      <Text style={styles.title}>Music Quiz</Text>
+      <TouchableOpacity style={styles.button} onPress={() => playPreview(tracks[0])}>
+        <Text style={styles.buttonText}>Start Quiz</Text>
+      </TouchableOpacity>
     </View>
   );
-}
+
+  const renderQuestionScreen = () => {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.questionText}>Question placeholder</Text>
+      </View>
+    );
+  };
+
+  return (
+    <View style={styles.container}>
+      {screen === 'start' && renderStartScreen()}
+      {screen === 'question' && renderQuestionScreen()}
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    padding: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  button: {
+    backgroundColor: '#3498db',
+    padding: 15,
+    borderRadius: 5,
+    marginBottom: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  questionText: {
+    fontSize: 20,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+});
 
 export default ChecklistScreen; 

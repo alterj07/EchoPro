@@ -11,9 +11,11 @@ const DUMMY_VIDEOS = [
   'video6.mp4',
 ];
 
+
+
 function PlayScreen() {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top']}>
       <StatusBar barStyle="dark-content" />
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 40 }}>
         <Text style={{ fontSize: 28, color: '#888', fontWeight: '500', marginBottom: 24 }}>Performances</Text>
@@ -81,7 +83,7 @@ function PlayScreen() {
                   marginLeft: 4,
                 }} />
               </TouchableOpacity>
-            </View>
+    </View>
           );
         })}
       </ScrollView>
