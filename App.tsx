@@ -32,6 +32,7 @@ if (Platform.OS === 'ios') {
 // Configure Google Sign-In
 GoogleSignin.configure({
   webClientId: '709853471538-lghod0kg73lrpsvrdr665gs2cao6uf7s.apps.googleusercontent.com', // Get this from Firebase console
+  iosClientId: '709853471538-kbbdlgl028b3fo9o0ihf9ckpdnvfvvd9.apps.googleusercontent.com',
 });
 
 const Tab = createBottomTabNavigator();
