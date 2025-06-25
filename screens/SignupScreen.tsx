@@ -11,8 +11,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import auth from '@react-native-firebase/auth';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { useAuth } from '../AuthContext';
 
 interface SignupScreenProps {
   navigation: any;
@@ -24,6 +23,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const { signUp, googleSignIn } = useAuth();
 
   const handleEmailSignup = async () => {
     if (!name || !email || !password || !confirmPassword) {
@@ -43,18 +43,11 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
 
     setLoading(true);
     try {
-      const response = await auth().createUserWithEmailAndPassword(email, password);
-      
-      // Update user profile with name
-      await response.user.updateProfile({
-        displayName: name,
-      });
-
-      console.log('User created:', response.user.uid);
-      navigation.replace('MainApp');
-    } catch (error: any) {
-      console.error('Signup error:', error);
-      Alert.alert('Signup Failed', error.message);
+      await signUp(name, email, password);
+      // Navigation will be handled automatically by auth state change
+    } catch (error) {
+      // Error is already handled in the context
+      setLoading(false);
     } finally {
       setLoading(false);
     }
@@ -63,19 +56,11 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
-      // Get the users ID token
-      const { idToken } = await GoogleSignin.signIn();
-
-      // Create a Google credential with the token
-      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
-
-      // Sign-in the user with the credential
-      const response = await auth().signInWithCredential(googleCredential);
-      console.log('Google sign-in successful:', response.user.uid);
-      navigation.replace('MainApp');
-    } catch (error: any) {
-      console.error('Google sign-in error:', error);
-      Alert.alert('Google Sign-In Failed', error.message);
+      await googleSignIn();
+      // Navigation will be handled automatically by auth state change
+    } catch (error) {
+      // Error is already handled in the context
+      setLoading(false);
     } finally {
       setLoading(false);
     }

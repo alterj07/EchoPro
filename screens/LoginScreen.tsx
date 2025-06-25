@@ -11,8 +11,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import auth from '@react-native-firebase/auth';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { useAuth } from '../AuthContext';
 
 interface LoginScreenProps {
   navigation: any;
@@ -22,6 +21,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const { signIn, googleSignIn } = useAuth();
 
   const handleEmailLogin = async () => {
     if (!email || !password) {
@@ -31,13 +31,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
     setLoading(true);
     try {
-      const response = await auth().signInWithEmailAndPassword(email, password);
-      console.log('User logged in:', response.user.uid);
-      // Navigate to main app
-      navigation.replace('MainApp');
-    } catch (error: any) {
-      console.error('Login error:', error);
-      Alert.alert('Login Failed', error.message);
+      await signIn(email, password);
+      // Navigation will be handled automatically by auth state change
+    } catch (error) {
+      // Error is already handled in the context
+      setLoading(false);
     } finally {
       setLoading(false);
     }
@@ -46,19 +44,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
-      // Get the users ID token
-      const { idToken } = await GoogleSignin.signIn();
-
-      // Create a Google credential with the token
-      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
-
-      // Sign-in the user with the credential
-      const response = await auth().signInWithCredential(googleCredential);
-      console.log('Google sign-in successful:', response.user.uid);
-      navigation.replace('MainApp');
-    } catch (error: any) {
-      console.error('Google sign-in error:', error);
-      Alert.alert('Google Sign-In Failed', error.message);
+      await googleSignIn();
+      // Navigation will be handled automatically by auth state change
+    } catch (error) {
+      // Error is already handled in the context
+      setLoading(false);
     } finally {
       setLoading(false);
     }

@@ -1,11 +1,4 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { StatusBar, StyleSheet, useColorScheme, View, Text, Image } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -18,13 +11,16 @@ import SettingsScreen from './screens/SettingsScreen';
 import LoginScreen from './screens/LoginScreen';
 import SignupScreen from './screens/SignupScreen';
 import { FontSizeProvider } from './fontSizeContext';
-import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-// import firebase from '@react-native-firebase/app';
 import { QuizProvider } from './QuizContext';
+import { AuthProvider, useAuth } from './AuthContext';
 import TrackPlayer from 'react-native-track-player';
 import { Platform } from 'react-native';
 import RNFS from 'react-native-fs';
+import firebase from '@react-native-firebase/app';
+import { getApp } from '@react-native-firebase/app';
+
+
 
 if (Platform.OS === 'ios') {
   const path = `${RNFS.MainBundlePath}/GoogleService-Info.plist`;
@@ -32,25 +28,15 @@ if (Platform.OS === 'ios') {
     console.log('Does GoogleService-Info.plist exist?', exists);
   });
 }
-const Tab = createBottomTabNavigator();
-const Stack = createStackNavigator();
-const AuthStack = createStackNavigator();
 
-// Initialize Firebase if it hasn't been initialized yet
-// if (!firebase.apps.length) {
-//   firebase.initializeApp({
-//     apiKey: "AIzaSyDKxF1VtFVTPcbZwtke2zkE1SWh8XtSXdQ",
-//     projectId: "echo-83a97",
-//     storageBucket: "echo-83a97.firebasestorage.app",
-//     appId: "1:709853471538:ios:5c201cc559cbb6ca0b6d2b",
-//     messagingSenderId: "709853471538"
-//   });
-// // }
-// console.log('🔥 Firebase Apps: ', firebase.apps);
 // Configure Google Sign-In
 GoogleSignin.configure({
   webClientId: '709853471538-lghod0kg73lrpsvrdr665gs2cao6uf7s.apps.googleusercontent.com', // Get this from Firebase console
 });
+
+const Tab = createBottomTabNavigator();
+const Stack = createStackNavigator();
+const AuthStack = createStackNavigator();
 
 function DashboardStack() {
   return (
@@ -69,9 +55,11 @@ function AuthNavigator() {
     </AuthStack.Navigator>
   );
 }
+
 TrackPlayer.setupPlayer().then(() => {
   console.log('Track player ready');
 });
+
 function MainApp() {
   return (
     <Tab.Navigator
@@ -99,19 +87,10 @@ function MainApp() {
   );
 }
 
-function App(): React.JSX.Element {
-  // const [user, setUser] = useState<FirebaseAuthTypes.User | null>(null);
-  const [initializing, setInitializing] = useState(true);
+function AppContent() {
+  const { user, loading } = useAuth();
 
-  useEffect(() => {
-    const unsubscribe = auth().onAuthStateChanged((user) => {
-      // setUser(user);
-      if (initializing) setInitializing(false);
-    });
-    return unsubscribe;
-  }, [initializing]);
-
-  if (initializing) {
+  if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <Text>Loading...</Text>
@@ -120,14 +99,21 @@ function App(): React.JSX.Element {
   }
 
   return (
-    <QuizProvider>
-      <FontSizeProvider>
-        <NavigationContainer>
-          {/* {user ? <MainApp /> : <AuthNavigator />} */}
-          <MainApp />
-        </NavigationContainer>
-      </FontSizeProvider>
-    </QuizProvider>
+    <FontSizeProvider>
+      <NavigationContainer>
+        {user ? <MainApp /> : <AuthNavigator />}
+      </NavigationContainer>
+    </FontSizeProvider>
+  );
+}
+
+function App(): React.JSX.Element {
+  return (
+    <AuthProvider>
+      <QuizProvider>
+        <AppContent />
+      </QuizProvider>
+    </AuthProvider>
   );
 }
 
