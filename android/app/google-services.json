@@ -1,0 +1,42 @@
+{
+  "project_info": {
+    "project_number": "709853471538",
+    "project_id": "echo-83a97",
+    "storage_bucket": "echo-83a97.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:709853471538:android:5c201cc559cbb6ca0b6d2b",
+        "android_client_info": {
+          "package_name": "org.reactjs.native.example.EchoPro"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "709853471538-lghod0kg73lrpsvrdr665gs2cao6uf7s.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDKxF1VtFVTPcbZwtke2zkE1SWh8XtSXdQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "709853471538-kbbdlgl028b3fo9o0ihf9ckpdnvfvvd9.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "org.reactjs.native.example.EchoPro"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+} 

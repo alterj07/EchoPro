@@ -23,12 +23,11 @@
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleURLName</key>
+			<string>REVERSED_CLIENT_ID</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>com.googleusercontent.apps.709853471538-kbbdlgl028b3fo9o0ihf9ckpdnvfvvd9</string>
-				<string>com.googleusercontent.apps.709853471538-Ighod0kg73Irpsvrdr665gs2cao6uf7s
-71538-
-com.googleusercontent.apps.709853471538-Ighod0kg73Irpsvrdr665gs2cao6uf7s</string>
 			</array>
 		</dict>
 	</array>
@@ -41,7 +40,7 @@ com.googleusercontent.apps.709853471538-Ighod0kg73Irpsvrdr665gs2cao6uf7s</string
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
-		<false/>
+		<true/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>

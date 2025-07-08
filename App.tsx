@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar, StyleSheet, useColorScheme, View, Text, Image } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -30,10 +30,7 @@ if (Platform.OS === 'ios') {
 }
 
 // Configure Google Sign-In
-GoogleSignin.configure({
-  webClientId: '709853471538-lghod0kg73lrpsvrdr665gs2cao6uf7s.apps.googleusercontent.com', // Get this from Firebase console
-  iosClientId: '709853471538-kbbdlgl028b3fo9o0ihf9ckpdnvfvvd9.apps.googleusercontent.com',
-});
+
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -109,6 +106,15 @@ function AppContent() {
 }
 
 function App(): React.JSX.Element {
+  useEffect(() => {
+    GoogleSignin.configure({
+      webClientId: '709853471538-lghod0kg73lrpsvrdr665gs2cao6uf7s.apps.googleusercontent.com',
+      iosClientId: '709853471538-kbbdlgl028b3fo9o0ihf9ckpdnvfvvd9.apps.googleusercontent.com',
+      offlineAccess: true,
+    });
+    console.log('GoogleSignin configured with webClientId:', '709853471538-lghod0kg73lrpsvrdr665gs2cao6uf7s.apps.googleusercontent.com');
+    console.log('GoogleSignin configured with iosClientId:', '709853471538-kbbdlgl028b3fo9o0ihf9ckpdnvfvvd9.apps.googleusercontent.com');
+  }, []);
   return (
     <AuthProvider>
       <QuizProvider>

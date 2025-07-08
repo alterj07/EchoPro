@@ -44,6 +44,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
+      console.log('before googleSignIn');
       await googleSignIn();
       // Navigation will be handled automatically by auth state change
     } catch (error) {
