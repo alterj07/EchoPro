@@ -1,24 +1,17 @@
 import React, { createContext, useState, ReactNode } from 'react';
 import TrackPlayer from 'react-native-track-player';
-// Replicating the detailed types from ChecklistScreen.tsx
-// type Song = {
-//   title: string;
-//   artist: string;
-//   audioFile: string;
-// };
 
-// interface ITunesTrack {
-//   trackId: number;
-//   trackName: string;
-//   artistName: string;
-//   artworkUrl100: string;
-//   previewUrl: string;
-// }
-
+interface ITunesTrack {
+  trackId: number;
+  trackName: string;
+  artistName: string;
+  artworkUrl100: string;
+  previewUrl: string;
+}
 
 type Question = {
   id: string;
-  songToGuess: Song;
+  track: ITunesTrack;
   options: string[];
   correctAnswer: string;
   userAnswer: string | null;

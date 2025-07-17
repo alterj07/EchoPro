@@ -12,7 +12,13 @@ export async function setupPlayer() {
     isSetup = true;
   }
   catch {
-    await TrackPlayer.setupPlayer();
+    await TrackPlayer.setupPlayer({
+      // Optimize for better performance
+      maxCacheSize: 1024 * 5, // 5MB cache
+      waitForBuffer: true,
+      autoHandleInterruptions: true,
+    });
+    
     await TrackPlayer.updateOptions({
       android: {
         appKilledPlaybackBehavior:
@@ -30,7 +36,7 @@ export async function setupPlayer() {
         Capability.Pause,
         Capability.SkipToNext,
       ],
-      progressUpdateEventInterval: 2,
+      progressUpdateEventInterval: 1, // More frequent updates for smoother progress
     });
 
     isSetup = true;
@@ -41,7 +47,18 @@ export async function setupPlayer() {
 }
 
 export async function addTrack(track: any) {
-  await TrackPlayer.add(track);
+  try {
+    // Pre-buffer the track for better performance
+    await TrackPlayer.add({
+      ...track,
+      headers: {
+        'User-Agent': 'EchoPro/1.0',
+      },
+    });
+  } catch (error) {
+    console.error('Error adding track:', error);
+    throw error;
+  }
 }
 
 export async function playbackService() {
@@ -59,5 +76,15 @@ export async function playbackService() {
 
   TrackPlayer.addEventListener(Event.RemotePrevious, () => {
     TrackPlayer.skipToPrevious();
+  });
+
+  // Handle playback errors gracefully
+  TrackPlayer.addEventListener(Event.PlaybackError, (event) => {
+    console.error('Playback error:', event);
+  });
+
+  // Handle track changes
+  TrackPlayer.addEventListener(Event.PlaybackTrackChanged, (event) => {
+    console.log('Track changed:', event);
   });
 } 

@@ -8,8 +8,11 @@ import type { StackNavigationProp } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FontSizeContext } from '../fontSizeContext';
 import { QuizContext } from '../QuizContext';
+import { useAuth } from '../AuthContext';
+import { useUserProgress } from '../UserProgressContext';
+import CircularProgress from '../components/CircularProgress';
 
-const QUIZ_HISTORY_KEY = 'quizHistory';
+
 
 type DashboardStackParamList = {
   Dashboard: undefined;
@@ -29,6 +32,7 @@ type QuizResult = {
 type ProcessedHistoryItem = QuizResult & {
   percent: number;
   color: string;
+  isActive: boolean;
 };
 
 type DailySummaryItem = {
@@ -40,6 +44,7 @@ type DailySummaryItem = {
     total: number;
     percent: number;
     color: string;
+    isActive: boolean;
 }
 
 type PerformanceData = {
@@ -52,16 +57,23 @@ type PerformanceData = {
 };
 
 
+
 function DashboardScreen() {
   const isDarkMode = useColorScheme() === 'dark';
   const [period, setPeriod] = useState<Period>('week');
   const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const { quizState } = useContext(QuizContext);
+  const { user } = useAuth();
+  const { userProgress, loading: progressLoading } = useUserProgress();
   const navigation = useNavigation<StackNavigationProp<DashboardStackParamList, 'Dashboard'>>();
   const { fontSize } = useContext(FontSizeContext);
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
+  
+  // User-specific storage key
+  const userId = user?.uid || 'anonymous';
+  const QUIZ_HISTORY_KEY = `quizHistory_${userId}`;
 
   const loadHistory = async () => {
     setLoading(true);
@@ -127,9 +139,10 @@ function DashboardScreen() {
       });
       
       const dailySummary: DailySummaryItem[] = Object.entries(dailyData).map(([day, data]) => {
-          const percent = data.total > 0 ? (data.correct / data.total) * 100 : 0;
-          const color = percent >= 80 ? '#4CAF50' : percent >= 60 ? '#FFC107' : '#F44336';
-          return { ...data, day, percent, color };
+          const isActive = data.total > 0;
+          const percent = isActive ? (data.correct / data.total) * 100 : 0;
+          const color = isActive ? (percent >= 80 ? '#4CAF50' : percent >= 60 ? '#FFC107' : '#F44336') : '#ccc';
+          return { ...data, day, percent, color, isActive };
       });
 
       const totalCorrect = dailySummary.reduce((acc, day) => acc + day.correct, 0);
@@ -154,9 +167,10 @@ function DashboardScreen() {
 
     const processedHistory: ProcessedHistoryItem[] = filteredHistory.map(item => {
       const totalAnswered = item.correct + item.incorrect;
-      const percent = totalAnswered > 0 ? (item.correct / totalAnswered) * 100 : 0;
-      const color = percent >= 80 ? '#4CAF50' : percent >= 60 ? '#FFC107' : '#F44336';
-      return { ...item, percent, color };
+      const isActive = totalAnswered > 0;
+      const percent = isActive ? (item.correct / totalAnswered) * 100 : 0;
+      const color = isActive ? (percent >= 80 ? '#4CAF50' : percent >= 60 ? '#FFC107' : '#F44336') : '#ccc';
+      return { ...item, percent, color, isActive };
     }).reverse();
 
     return { totalQuizzes, totalCorrect, totalIncorrect, totalSkipped, overallPercent, history: processedHistory };
@@ -167,10 +181,25 @@ function DashboardScreen() {
     return days[date.getDay()];
   };
 
+  const formatTime = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${remainingSeconds}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${remainingSeconds}s`;
+    } else {
+      return `${remainingSeconds}s`;
+    }
+  };
+
   const PeriodButton = ({ p, label }: { p: Period; label: string }) => (
     <TouchableOpacity
       style={[styles.periodButton, period === p && styles.selectedPeriod]}
       onPress={() => setPeriod(p)}
+      activeOpacity={0.7}
     >
       <Text style={[styles.periodText, period === p && styles.selectedPeriodText]}>{label}</Text>
     </TouchableOpacity>
@@ -183,11 +212,15 @@ function DashboardScreen() {
     
     return (
       <View key={key} style={styles.historyItem}>
-          <View style={[styles.percentageCircle, { borderColor: item.color }]}>
-              <Text style={[styles.percentageText, { color: item.color }]}>{item.percent.toFixed(0)}%</Text>
-          </View>
+          <CircularProgress
+            correct={item.correct}
+            incorrect={item.incorrect}
+            skipped={item.skipped}
+            total={item.total}
+            size={60}
+          />
           <View style={styles.historyDetails}>
-              <Text style={[styles.historyDate, { fontWeight: 'day' in item ? 'bold' : '500' }]}>{title}</Text>
+              <Text style={[styles.historyDate, { fontWeight: 'day' in item ? 'bold' : '600' }]}>{title}</Text>
               <Text style={styles.historyStats}>{stats}</Text>
           </View>
       </View>
@@ -198,73 +231,132 @@ function DashboardScreen() {
     if (isFocused) {
       loadHistory();
     }
-  }, [isFocused, period]);
+  }, [isFocused, period, userId]); // Reload when user changes
 
   const liveCorrect = quizState?.correctCount ?? 0;
   const liveIncorrect = quizState?.incorrectCount ?? 0;
   const liveSkipped = quizState?.skippedCount ?? 0;
-  const liveTotal = liveCorrect + liveIncorrect;
+  const liveTotal = liveCorrect + liveIncorrect + liveSkipped;
   const livePercent = liveTotal > 0 ? (liveCorrect / liveTotal) * 100 : 0;
-  const livePerformanceColor = livePercent >= 80 ? '#4CAF50' : livePercent >= 60 ? '#FFC107' : '#F44336';
+  const livePerformanceColor = liveTotal > 0 ? (livePercent >= 80 ? '#4CAF50' : livePercent >= 60 ? '#FFC107' : '#F44336') : '#ccc';
 
-  if (loading) {
+  if (loading || progressLoading) {
     return (
-      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" />
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2563EB" />
+        <Text style={styles.loadingText}>Loading your progress...</Text>
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.container}>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Your Performance</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.settingsButton}>
-            <Ionicons name="settings-outline" size={fontSize + 8} color="#444" />
+          <Text style={styles.headerTitle}>Your Music Progress</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.settingsButton} activeOpacity={0.7}>
+            <Ionicons name="settings-outline" size={28} color="#1A1A1A" />
           </TouchableOpacity>
         </View>
-        <Text style={styles.subTitle}>Dashboard</Text>
         
         {quizState && (
-          <View style={[styles.card, { borderColor: livePerformanceColor }]}>
-            <Text style={[styles.cardTitle, { fontSize: fontSize + 2 }]}>Today's Performance (Live)</Text>
-            <View style={styles.statsRow}>
-              <Text style={styles.statLabel}>Correct:</Text><Text style={[styles.statValue, { color: '#4CAF50' }]}>{liveCorrect}</Text>
-              <Text style={styles.statLabel}>Incorrect:</Text><Text style={[styles.statValue, { color: '#F44336' }]}>{liveIncorrect}</Text>
-              <Text style={styles.statLabel}>Skipped:</Text><Text style={[styles.statValue, { color: '#FFC107' }]}>{liveSkipped}</Text>
+          <View style={[styles.card, styles.liveCard, { borderColor: livePerformanceColor }]}>
+            <Text style={styles.cardTitle}>Today's Live Progress</Text>
+            <View style={styles.statsContainer}>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Correct</Text>
+                <Text style={[styles.statValue, { color: '#4CAF50' }]}>{liveCorrect}</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Incorrect</Text>
+                <Text style={[styles.statValue, { color: '#F44336' }]}>{liveIncorrect}</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Skipped</Text>
+                <Text style={[styles.statValue, { color: '#FFC107' }]}>{liveSkipped}</Text>
+              </View>
             </View>
-            <View style={styles.progressBarBackground}>
-              <View style={[styles.progressBarFill, { width: `${livePercent}%`, backgroundColor: livePerformanceColor }]} />
+            <View style={styles.progressContainer}>
+              <Text style={styles.progressLabel}>Success Rate: {livePercent.toFixed(0)}%</Text>
+              <View style={styles.progressBarBackground}>
+                <View style={[styles.progressBarFill, { width: `${livePercent}%`, backgroundColor: livePerformanceColor }]} />
+              </View>
+            </View>
+          </View>
+        )}
+
+        {userProgress && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Overall Progress</Text>
+            <View style={styles.summaryContainer}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Total Quizzes</Text>
+                <Text style={[styles.summaryValue, { color: '#2563EB' }]}>{userProgress.overallStats.totalQuizzesTaken}</Text>
+              </View>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Overall Accuracy</Text>
+                <Text style={[styles.summaryValue, { color: '#4CAF50' }]}>{userProgress.overallStats.overallAccuracy.toFixed(1)}%</Text>
+              </View>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Current Streak</Text>
+                <Text style={[styles.summaryValue, { color: '#FF9800' }]}>{userProgress.overallStats.currentStreak} days</Text>
+              </View>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Best Score</Text>
+                <Text style={[styles.summaryValue, { color: '#9C27B0' }]}>{userProgress.overallStats.bestQuizScore.toFixed(1)}%</Text>
+              </View>
+            </View>
+            <View style={styles.progressContainer}>
+              <Text style={styles.progressLabel}>Total Questions: {userProgress.overallStats.totalQuestionsAnswered}</Text>
+              <Text style={styles.progressLabel}>Total Time: {formatTime(userProgress.overallStats.totalTimeSpent)}</Text>
             </View>
           </View>
         )}
 
         <View style={styles.card}>
-          <Text style={[styles.cardTitle, { fontSize: fontSize + 2 }]}>Performance History</Text>
+          <Text style={styles.cardTitle}>Your History</Text>
           <View style={styles.periodContainer}>
             <PeriodButton p="day" label="Day" />
             <PeriodButton p="week" label="Week" />
             <PeriodButton p="month" label="Month" />
             <PeriodButton p="year" label="Year" />
-            <PeriodButton p="all" label="All" />
+            <PeriodButton p="all" label="All Time" />
           </View>
 
           {performanceData && performanceData.history.length > 0 ? (
             <>
-              <View style={styles.statsRow}>
-                <Text style={styles.statLabel}>Avg:</Text><Text style={[styles.statValue, { color: '#4CAF50' }]}>{performanceData.overallPercent.toFixed(0)}%</Text>
-                <Text style={styles.statLabel}>Correct:</Text><Text style={[styles.statValue, { color: '#4CAF50' }]}>{performanceData.totalCorrect}</Text>
-                <Text style={styles.statLabel}>Incorrect:</Text><Text style={[styles.statValue, { color: '#F44336' }]}>{performanceData.totalIncorrect}</Text>
-                <Text style={styles.statLabel}>Skipped:</Text><Text style={[styles.statValue, { color: '#FFC107' }]}>{performanceData.totalSkipped}</Text>
+              <View style={styles.summaryContainer}>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Average Score</Text>
+                  <Text style={[styles.summaryValue, { color: '#4CAF50' }]}>{performanceData.overallPercent.toFixed(0)}%</Text>
+                </View>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Total Correct</Text>
+                  <Text style={[styles.summaryValue, { color: '#4CAF50' }]}>{performanceData.totalCorrect}</Text>
+                </View>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Total Incorrect</Text>
+                  <Text style={[styles.summaryValue, { color: '#F44336' }]}>{performanceData.totalIncorrect}</Text>
+                </View>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Total Skipped</Text>
+                  <Text style={[styles.summaryValue, { color: '#FFC107' }]}>{performanceData.totalSkipped}</Text>
+                </View>
               </View>
-              <Text style={{ fontSize: fontSize, fontWeight: '500', marginBottom: 8, marginTop: 16 }}>
-                {period === 'day' ? 'Daily Summary (This Week)' : 'History'}
+              
+              <Text style={styles.sectionTitle}>
+                {period === 'day' ? 'This Week\'s Daily Summary' : 'Recent Activity'}
               </Text>
-              {performanceData.history.map(renderHistoryItem)}
+              
+              <View style={styles.historyContainer}>
+                {performanceData.history.map(renderHistoryItem)}
+              </View>
             </>
           ) : (
-            <Text style={styles.noDataText}>No quiz data available for this period.</Text>
+            <View style={styles.noDataContainer}>
+              <Text style={styles.noDataText}>No quiz data available for this period.</Text>
+              <Text style={styles.noDataSubtext}>Start taking quizzes to see your progress here!</Text>
+            </View>
           )}
         </View>
       </ScrollView>
@@ -273,84 +365,220 @@ function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#fff' },
-  container: { paddingHorizontal: 24, paddingTop: 32, flex: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle: { fontSize: 24, fontWeight: '600', marginBottom: 4 },
-  settingsButton: { padding: 8 },
-  subTitle: { fontSize: 16, color: '#444', marginBottom: 16 },
-  card: { backgroundColor: '#fff', padding: 16, borderRadius: 12, marginBottom: 16 },
-  cardTitle: { fontSize: 18, fontWeight: '600', marginBottom: 8 },
-  periodContainer: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8 },
-  periodButton: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    marginLeft: 8,
-    backgroundColor: '#fff',
+  safeArea: { 
+    flex: 1, 
+    backgroundColor: '#F8FAFC' 
   },
-  periodText: { color: '#444', fontSize: 14, fontWeight: '400', textTransform: 'capitalize' },
-  selectedPeriod: { backgroundColor: '#f7f7f7' },
-  selectedPeriodText: { fontWeight: '700' },
-  statsRow: {
-    flexDirection: 'row',
+  container: { 
+    paddingHorizontal: 24, 
+    paddingTop: 24, 
+    flex: 1 
+  },
+  loadingContainer: {
+    flex: 1, 
+    justifyContent: 'center', 
     alignItems: 'center',
+    backgroundColor: '#F8FAFC'
+  },
+  loadingText: {
+    fontSize: 18,
+    color: '#666666',
+    marginTop: 16,
+    fontWeight: '500'
+  },
+  header: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center',
+    marginBottom: 24
+  },
+  headerTitle: { 
+    fontSize: 32, 
+    fontWeight: 'bold', 
+    color: '#1A1A1A',
+    letterSpacing: 0.5
+  },
+  settingsButton: { 
+    padding: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  card: { 
+    backgroundColor: '#FFFFFF', 
+    padding: 24, 
+    borderRadius: 20, 
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5
+  },
+  liveCard: {
+    borderWidth: 3,
+    borderStyle: 'solid'
+  },
+  cardTitle: { 
+    fontSize: 24, 
+    fontWeight: 'bold', 
+    marginBottom: 20,
+    color: '#1A1A1A',
+    letterSpacing: 0.5
+  },
+  periodContainer: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginBottom: 24,
+    flexWrap: 'wrap',
+    gap: 8
+  },
+  periodButton: {
+    borderWidth: 3,
+    borderColor: '#E0E0E0',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    minWidth: 80,
+    alignItems: 'center'
+  },
+  periodText: { 
+    color: '#666666', 
+    fontSize: 16, 
+    fontWeight: '600', 
+    textTransform: 'capitalize' 
+  },
+  selectedPeriod: { 
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB'
+  },
+  selectedPeriodText: { 
+    fontWeight: 'bold',
+    color: '#FFFFFF'
+  },
+  statsContainer: {
+    flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 12,
+    marginBottom: 24,
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1
   },
   statLabel: {
-    color: '#666',
-    fontSize: 14,
+    color: '#666666',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4
   },
   statValue: {
-    fontWeight: '700',
-    fontSize: 16,
-    marginLeft: 4,
+    fontWeight: 'bold',
+    fontSize: 24,
+    color: '#1A1A1A'
+  },
+  progressContainer: {
+    marginTop: 8
+  },
+  progressLabel: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    marginBottom: 8
   },
   progressBarBackground: {
-    height: 8,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 4,
+    height: 12,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 6,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 6,
+  },
+  summaryContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+    gap: 16
+  },
+  summaryItem: {
+    flex: 1,
+    minWidth: '45%',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#E0E0E0'
+  },
+  summaryLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666666',
+    marginBottom: 4,
+    textAlign: 'center'
+  },
+  summaryValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1A1A1A'
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1A1A1A',
+    marginBottom: 16,
+    letterSpacing: 0.5
+  },
+  historyContainer: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16
   },
   historyItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  percentageCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  percentageText: {
-    fontWeight: '700',
-    fontSize: 14,
+    paddingVertical: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: '#E0E0E0',
   },
   historyDetails: {
     flex: 1,
+    marginLeft: 20
   },
   historyDate: {
-    color: '#333',
-    fontWeight: '500',
+    color: '#1A1A1A',
+    fontWeight: '600',
     marginBottom: 4,
+    fontSize: 18
   },
   historyStats: {
-    color: '#666',
+    color: '#666666',
+    fontSize: 16
   },
-  noDataText: { fontSize: 16, color: '#666', textAlign: 'center', marginTop: 16 },
+  noDataContainer: {
+    alignItems: 'center',
+    paddingVertical: 40
+  },
+  noDataText: { 
+    fontSize: 20, 
+    color: '#666666', 
+    textAlign: 'center', 
+    marginBottom: 8,
+    fontWeight: '600'
+  },
+  noDataSubtext: {
+    fontSize: 16,
+    color: '#888888',
+    textAlign: 'center',
+    fontStyle: 'italic'
+  }
 });
 
 export default DashboardScreen; 

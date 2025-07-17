@@ -30,6 +30,7 @@
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = EchoPro/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = EchoPro/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		A09E06DEB96A34C85A49A1A0 /* Pods_EchoPro.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_EchoPro.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		BF4572FA2E1DDBD4007DD78B /* EchoPro.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = EchoPro.entitlements; path = EchoPro/EchoPro.entitlements; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -50,6 +51,7 @@
 		13B07FAE1A68108700A75B9A /* EchoPro */ = {
 			isa = PBXGroup;
 			children = (
+				BF4572FA2E1DDBD4007DD78B /* EchoPro.entitlements */,
 				5BA490EB2E0B658800DE5DA2 /* GoogleService-Info.plist */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
@@ -285,6 +287,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = EchoPro/EchoPro.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = U6PGQP2YDU;
 				ENABLE_BITCODE = NO;
@@ -314,6 +317,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = EchoPro/EchoPro.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = U6PGQP2YDU;
 				INFOPLIST_FILE = EchoPro/Info.plist;

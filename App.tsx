@@ -14,6 +14,7 @@ import { FontSizeProvider } from './fontSizeContext';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { QuizProvider } from './QuizContext';
 import { AuthProvider, useAuth } from './AuthContext';
+import { UserProgressProvider } from './UserProgressContext';
 import TrackPlayer from 'react-native-track-player';
 import { Platform } from 'react-native';
 import RNFS from 'react-native-fs';
@@ -72,15 +73,33 @@ function MainApp() {
           } else if (route.name === 'Play') {
             source = focused ? require('./assets/activatedPlayer.png') : require('./assets/deactivatedPlayer.png');
           }
-          return <Image source={source} style={{ width: 24, height: 24, objectFit: 'contain' }} />;
+          return <Image source={source} style={{ width: 32, height: 32, objectFit: 'contain' }} />;
         },
-        tabBarActiveTintColor: '#222',
-        tabBarInactiveTintColor: 'gray',
+        tabBarActiveTintColor: '#2563EB',
+        tabBarInactiveTintColor: '#6B7280',
+        tabBarStyle: {
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: 2,
+          borderTopColor: '#E0E0E0',
+          paddingTop: 8,
+          paddingBottom: 16,
+          height: 80,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 14,
+          fontWeight: '600',
+          marginTop: 4,
+        },
       })}
     >
-      <Tab.Screen name="DashboardTab" component={DashboardStack} options={{ title: 'Dashboard' }} />
-      <Tab.Screen name="Checklist" component={ChecklistScreen} />
-      <Tab.Screen name="Play" component={PlayScreen} />
+      <Tab.Screen name="DashboardTab" component={DashboardStack} options={{ title: 'Progress' }} />
+      <Tab.Screen name="Checklist" component={ChecklistScreen} options={{ title: 'Quiz' }} />
+      <Tab.Screen name="Play" component={PlayScreen} options={{ title: 'Videos' }} />
     </Tab.Navigator>
   );
 }
@@ -108,18 +127,20 @@ function AppContent() {
 function App(): React.JSX.Element {
   useEffect(() => {
     GoogleSignin.configure({
-      webClientId: '709853471538-lghod0kg73lrpsvrdr665gs2cao6uf7s.apps.googleusercontent.com',
+      webClientId: '709853471538-rgcfg6fdh1dfn6k21bjkovrqojqc17ta.apps.googleusercontent.com',
       iosClientId: '709853471538-kbbdlgl028b3fo9o0ihf9ckpdnvfvvd9.apps.googleusercontent.com',
       offlineAccess: true,
     });
-    console.log('GoogleSignin configured with webClientId:', '709853471538-lghod0kg73lrpsvrdr665gs2cao6uf7s.apps.googleusercontent.com');
+    console.log('GoogleSignin configured with webClientId:', '709853471538-rgcfg6fdh1dfn6k21bjkovrqojqc17ta.apps.googleusercontent.com');
     console.log('GoogleSignin configured with iosClientId:', '709853471538-kbbdlgl028b3fo9o0ihf9ckpdnvfvvd9.apps.googleusercontent.com');
   }, []);
   return (
     <AuthProvider>
-      <QuizProvider>
-        <AppContent />
-      </QuizProvider>
+      <UserProgressProvider>
+        <QuizProvider>
+          <AppContent />
+        </QuizProvider>
+      </UserProgressProvider>
     </AuthProvider>
   );
 }

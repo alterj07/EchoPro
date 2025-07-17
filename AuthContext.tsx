@@ -14,9 +14,10 @@ interface AuthContextType {
   user: FirebaseAuthTypes.User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (name: string, email: string, password: string) => Promise<void>;
+  signUp: (name: string, email: string, password: string) => Promise<FirebaseAuthTypes.User>;
   signOut: () => Promise<void>;
   googleSignIn: () => Promise<void>;
+  appleSignIn: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -55,6 +56,32 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
     } catch (error: any) {
       console.error('Login error:', error);
+      
+      // Special handling for dev account creation
+      if (email === 'dev@echopro.com' && error.code === 'auth/user-not-found') {
+        try {
+          console.log('Creating dev account...');
+          const devResponse = await auth().createUserWithEmailAndPassword(email, password);
+          await devResponse.user.updateProfile({
+            displayName: 'Development User',
+          });
+          console.log('Dev account created successfully');
+          
+          // Create user in backend
+          await axios.post(`${API_BASE_URL}/users/create`, {
+            userId: devResponse.user.uid,
+            name: 'Development User',
+          });
+          
+          Alert.alert('Dev Account Created', 'Development account created successfully! You can now use it for testing.');
+          return;
+        } catch (createError: any) {
+          console.error('Dev account creation failed:', createError);
+          Alert.alert('Dev Account Creation Failed', createError.message);
+          throw createError;
+        }
+      }
+      
       Alert.alert('Login Failed', error.message);
       throw error;
     }
@@ -75,6 +102,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         userId: response.user.uid,
         name: name,
       });
+      
+      return response.user;
     } catch (error: any) {
       console.error('Signup error:', error);
       Alert.alert('Signup Failed', error.message);
@@ -183,6 +212,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const appleSignIn = async () => {
+    try {
+      console.log('Apple Sign-In not implemented yet');
+      Alert.alert('Coming Soon', 'Apple Sign-In will be available in a future update.');
+    } catch (error: any) {
+      console.error('Apple sign-in error:', error);
+      Alert.alert('Apple Sign-In Failed', 'Apple Sign-In is not available yet.');
+      throw error;
+    }
+  };
+
   const value: AuthContextType = {
     user,
     loading,
@@ -190,6 +230,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signUp,
     signOut,
     googleSignIn,
+    appleSignIn,
   };
 
   return (

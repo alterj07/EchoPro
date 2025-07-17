@@ -1,97 +1,171 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# EchoPro - 80s Music Quiz App
 
-# Getting Started
+A React Native app that tests your knowledge of 80s music through an interactive quiz experience.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+## Features
 
-## Step 1: Start Metro
+### 🎵 80s Music Quiz
+- **Daily Quiz Limit**: Users can answer up to 20 questions per day
+- **Random Song Playback**: Each question plays a random 80s song for 10-30 seconds
+- **Multiple Choice**: 4 song title options plus an "I don't know" option
+- **Interactive Feedback**: Visual feedback for correct/incorrect answers
+- **Progress Tracking**: Real-time progress updates during the quiz
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+### 📊 Performance Dashboard
+- **Live Performance**: Shows current day's quiz performance
+- **Historical Data**: View performance over different time periods (day, week, month, year, all-time)
+- **Statistics**: Track correct, incorrect, and skipped answers
+- **Percentage Calculations**: Automatic calculation of success rates
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+### 🎯 Quiz Features
+- **Song Recognition**: Uses iTunes API to fetch 80s songs with preview URLs
+- **Randomized Questions**: Each quiz session generates unique questions
+- **Answer Validation**: Immediate feedback on answer selection
+- **Daily Reset**: Quiz limits reset at midnight for fresh daily challenges
 
-```sh
-# Using npm
-npm start
+## Technical Implementation
 
-# OR using Yarn
-yarn start
-```
+### Quiz Flow
+1. **Start Screen**: Shows daily progress and quiz statistics
+2. **Quiz Screen**: 
+   - Displays current question number and daily progress
+   - Plays random 80s song for 10-30 seconds
+   - Shows 4 multiple choice options + "I don't know"
+   - Provides visual feedback for answers
+3. **Results Screen**: Shows final statistics for the quiz session
 
-## Step 2: Build and run your app
+### Data Storage
+- **AsyncStorage**: Stores daily quiz data and historical performance
+- **Quiz History**: Maintains detailed records of all quiz attempts
+- **Daily Limits**: Tracks and enforces 20 questions per day limit
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+### State Management
+- **QuizContext**: Manages global quiz state across the app
+- **Real-time Updates**: Dashboard updates live during quiz sessions
+- **Persistent Data**: All quiz data persists between app sessions
 
-### Android
+## Getting Started
 
-```sh
-# Using npm
-npm run android
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-# OR using Yarn
-yarn android
-```
+2. For iOS:
+   ```bash
+   cd ios && pod install && cd ..
+   npx react-native run-ios
+   ```
 
-### iOS
+3. For Android:
+   ```bash
+   npx react-native run-android
+   ```
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+## Authentication
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+The app supports multiple authentication methods:
 
-```sh
-bundle install
-```
+### Apple Sign-In
+- **iOS Only**: Available on iOS devices with iOS 13+
+- **Automatic Setup**: Configured with Firebase authentication
+- **User Data**: Retrieves email and full name (if provided by user)
+- **Privacy**: Follows Apple's privacy guidelines
 
-Then, and every time you update your native dependencies, run:
+### Google Sign-In
+- **Cross-Platform**: Available on both iOS and Android
+- **Firebase Integration**: Seamlessly integrated with Firebase Auth
+- **User Profile**: Automatically creates user profile in backend
 
-```sh
-bundle exec pod install
-```
+### Email/Password
+- **Traditional**: Standard email and password authentication
+- **Backend Integration**: Creates user records in the backend API
+- **Development**: Includes dev account for testing purposes
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+## Dependencies
 
-```sh
-# Using npm
-npm run ios
+- **react-native-track-player**: Audio playback for song previews
+- **@react-native-async-storage/async-storage**: Local data persistence
+- **react-native-vector-icons**: UI icons
+- **@react-navigation**: Navigation between screens
+- **@invertase/react-native-apple-authentication**: Apple Sign-In integration
+- **@react-native-google-signin/google-signin**: Google Sign-In integration
+- **@react-native-firebase/auth**: Firebase authentication
 
-# OR using Yarn
-yarn ios
-```
+## API Integration
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+The app uses the iTunes Search API to fetch 80s songs:
+- Endpoint: `https://itunes.apple.com/search?term=1980s&entity=song&limit=100`
+- Filters songs with available preview URLs
+- Generates random questions from the song pool
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+## Quiz Algorithm
 
-## Step 3: Modify your app
+1. **Song Selection**: Randomly selects songs from the 80s catalog
+2. **Question Generation**: Creates multiple choice questions with 3 wrong answers + 1 correct answer
+3. **Answer Validation**: Compares user selection with correct song title
+4. **Progress Tracking**: Updates daily statistics and historical data
+5. **Daily Limits**: Enforces 20 questions per day maximum
 
-Now that you have successfully run the app, let's make changes!
+## Performance Tracking
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+The app provides comprehensive progress tracking across multiple time periods:
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+### Time Periods
+- **Daily**: Today's quiz performance and statistics
+- **Weekly**: This week's performance with daily breakdown
+- **Monthly**: This month's performance with weekly trends
+- **Yearly**: This year's performance with monthly overview
+- **All-Time**: Complete performance history since joining
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+### Statistics Tracked
+- **Quiz Performance**: Total quizzes taken, questions answered
+- **Accuracy Metrics**: Correct, incorrect, and skipped answers
+- **Score Analysis**: Average, best, and worst scores
+- **Streak Tracking**: Current and longest consecutive day streaks
+- **Time Tracking**: Total time spent on quizzes
+- **Progress History**: Detailed history of all quiz attempts
 
-## Congratulations! :tada:
+### Dashboard Features
+- **Live Progress**: Real-time updates during active quiz sessions
+- **Period Selection**: Switch between different time periods
+- **Visual Charts**: Circular progress indicators and progress bars
+- **Performance Summary**: Key statistics for each period
+- **Historical Data**: Detailed breakdown of past performance
 
-You've successfully run and modified your React Native App. :partying_face:
+## Backend API
 
-### Now what?
+The app includes a comprehensive backend API for user management and progress tracking:
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+### User Management
+- **User Creation**: Automatic user creation on first sign-in
+- **Profile Management**: Update user preferences and profile information
+- **Authentication Integration**: Works with Firebase Auth, Google Sign-In, and Apple Sign-In
 
-# Troubleshooting
+### Progress Tracking API
+- **Progress Updates**: Automatically update progress for all time periods
+- **Data Retrieval**: Get progress data for specific periods or all periods
+- **Statistics Calculation**: Real-time calculation of accuracy, streaks, and performance metrics
+- **Leaderboards**: Global leaderboards for accuracy and streaks
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+### API Endpoints
+- `POST /api/users/create` - Create or get user
+- `GET /api/users/:userId` - Get user profile
+- `POST /api/users/:userId/progress` - Update user progress
+- `GET /api/users/:userId/progress/:period` - Get progress for specific period
+- `GET /api/users/:userId/progress` - Get all progress data
+- `GET /api/users/leaderboard/accuracy` - Get accuracy leaderboard
+- `GET /api/users/leaderboard/streak` - Get streak leaderboard
 
-# Learn More
+## Future Enhancements
 
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+- [x] Comprehensive progress tracking (daily, weekly, monthly, yearly, all-time)
+- [x] Achievement system with unlockable badges
+- [x] Leaderboards for accuracy and streaks
+- [ ] Difficulty levels (easy, medium, hard)
+- [ ] Different music decades (70s, 90s, etc.)
+- [ ] Social features (challenges, friend competitions)
+- [ ] Offline mode with cached songs
+- [ ] Custom quiz creation
+- [ ] Push notifications for daily reminders
+- [ ] Advanced analytics and insights

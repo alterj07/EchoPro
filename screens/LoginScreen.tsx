@@ -21,11 +21,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn, googleSignIn } = useAuth();
+  const { signIn, googleSignIn, appleSignIn } = useAuth();
 
   const handleEmailLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert('Please Complete', 'Please fill in both email and password fields');
       return;
     }
 
@@ -56,8 +56,31 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   };
 
   const handleAppleSignIn = async () => {
-    Alert.alert('Apple Sign-In', 'Apple Sign-In will be implemented with react-native-apple-authentication');
-    // TODO: Implement Apple Sign-In
+    setLoading(true);
+    try {
+      console.log('before appleSignIn');
+      await appleSignIn();
+      // Navigation will be handled automatically by auth state change
+    } catch (error) {
+      // Error is already handled in the context
+      setLoading(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDevLogin = async () => {
+    setLoading(true);
+    try {
+      // Use temporary dev credentials
+      await signIn('dev@echopro.com', 'devpassword123');
+      Alert.alert('Dev Login', 'Logged in with development account: dev@echopro.com');
+    } catch (error) {
+      console.error('Dev login error:', error);
+      Alert.alert('Dev Login Failed', 'Failed to login with dev account. Please check Firebase configuration.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -68,49 +91,65 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.content}>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Sign in to continue</Text>
+            {/* Large, clear title */}
+            <Text style={styles.title}>Welcome to EchoPro</Text>
+            <Text style={styles.subtitle}>Your Music Memory App</Text>
 
             <View style={styles.form}>
-              <TextInput
-                style={styles.input}
-                placeholder="Email"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
+              {/* Email Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Email Address</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your email"
+                  placeholderTextColor="#888"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
 
-              <TextInput
-                style={styles.input}
-                placeholder="Password"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                autoCapitalize="none"
-              />
+              {/* Password Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Password</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#888"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+              </View>
 
+              {/* Main Sign In Button */}
               <TouchableOpacity
                 style={[styles.button, styles.primaryButton, loading && styles.disabledButton]}
                 onPress={handleEmailLogin}
                 disabled={loading}
+                activeOpacity={0.7}
               >
                 <Text style={styles.buttonText}>
-                  {loading ? 'Signing In...' : 'Sign In'}
+                  {loading ? 'Signing In...' : 'SIGN IN'}
                 </Text>
               </TouchableOpacity>
 
+              {/* Clear divider */}
               <View style={styles.divider}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or</Text>
+                <Text style={styles.dividerText}>OR</Text>
                 <View style={styles.dividerLine} />
               </View>
 
+              {/* Alternative Sign In Options */}
               <TouchableOpacity
                 style={[styles.button, styles.googleButton, loading && styles.disabledButton]}
                 onPress={handleGoogleSignIn}
                 disabled={loading}
+                activeOpacity={0.7}
               >
                 <Text style={styles.googleButtonText}>Continue with Google</Text>
               </TouchableOpacity>
@@ -119,14 +158,26 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
                 style={[styles.button, styles.appleButton, loading && styles.disabledButton]}
                 onPress={handleAppleSignIn}
                 disabled={loading}
+                activeOpacity={0.7}
               >
                 <Text style={styles.appleButtonText}>Continue with Apple</Text>
               </TouchableOpacity>
 
+              {/* Development Login Button - Hidden by default for cleaner UI */}
+              <TouchableOpacity
+                style={[styles.button, styles.devButton, loading && styles.disabledButton]}
+                onPress={handleDevLogin}
+                disabled={loading}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.devButtonText}>🔧 Developer Login</Text>
+              </TouchableOpacity>
+
+              {/* Clear sign up link */}
               <View style={styles.footer}>
                 <Text style={styles.footerText}>Don't have an account? </Text>
-                <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
-                  <Text style={styles.linkText}>Sign Up</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Signup')} activeOpacity={0.7}>
+                  <Text style={styles.linkText}>Create Account</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -140,7 +191,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
   },
   keyboardView: {
     flex: 1,
@@ -150,98 +201,132 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   content: {
-    paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingHorizontal: 32,
+    paddingVertical: 40,
   },
   title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#222',
+    fontSize: 42,
+    fontWeight: 'bold',
+    color: '#1A1A1A',
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
+    letterSpacing: 0.5,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 20,
+    color: '#666666',
     textAlign: 'center',
-    marginBottom: 48,
+    marginBottom: 60,
+    fontWeight: '500',
   },
   form: {
     width: '100%',
   },
+  inputContainer: {
+    marginBottom: 24,
+  },
+  inputLabel: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    marginBottom: 8,
+  },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    fontSize: 16,
-    marginBottom: 16,
-    backgroundColor: '#f9f9f9',
+    borderWidth: 3,
+    borderColor: '#E0E0E0',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    fontSize: 18,
+    backgroundColor: '#FAFAFA',
+    color: '#1A1A1A',
   },
   button: {
-    borderRadius: 12,
-    paddingVertical: 16,
+    borderRadius: 16,
+    paddingVertical: 20,
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   primaryButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#2563EB',
+    borderWidth: 0,
   },
   googleButton: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 3,
+    borderColor: '#E0E0E0',
   },
   appleButton: {
-    backgroundColor: '#000',
+    backgroundColor: '#000000',
+    borderWidth: 0,
+  },
+  devButton: {
+    backgroundColor: '#FF6B35',
+    borderWidth: 3,
+    borderColor: '#FF4500',
   },
   disabledButton: {
     opacity: 0.6,
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   googleButtonText: {
-    color: '#222',
-    fontSize: 16,
+    color: '#1A1A1A',
+    fontSize: 18,
     fontWeight: '600',
   },
   appleButtonText: {
-    color: '#fff',
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  devButtonText: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 24,
+    marginVertical: 32,
   },
   dividerLine: {
     flex: 1,
-    height: 1,
-    backgroundColor: '#ddd',
+    height: 2,
+    backgroundColor: '#E0E0E0',
   },
   dividerText: {
-    marginHorizontal: 16,
-    color: '#666',
-    fontSize: 14,
+    marginHorizontal: 20,
+    color: '#666666',
+    fontSize: 16,
+    fontWeight: '600',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 24,
+    marginTop: 32,
+    paddingTop: 20,
+    borderTopWidth: 2,
+    borderTopColor: '#F0F0F0',
   },
   footerText: {
-    color: '#666',
-    fontSize: 14,
+    color: '#666666',
+    fontSize: 18,
   },
   linkText: {
-    color: '#007AFF',
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#2563EB',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
   },
 });
 
