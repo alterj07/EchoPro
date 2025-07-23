@@ -1,12 +1,13 @@
-# EchoPro - 80s Music Quiz App
+# EchoPro - Personalized Music Quiz App
 
-A React Native app that tests your knowledge of 80s music through an interactive quiz experience.
+A React Native app that tests your knowledge of music from your formative years (ages 15-40) through an interactive quiz experience.
 
 ## Features
 
-### 🎵 80s Music Quiz
+### 🎵 Personalized Music Quiz
+- **Age-Based Music Selection**: Quiz features top songs from when you were 15-40 years old
 - **Daily Quiz Limit**: Users can answer up to 20 questions per day
-- **Random Song Playback**: Each question plays a random 80s song for 10-30 seconds
+- **Random Song Playback**: Each question plays a random song for 10-30 seconds
 - **Multiple Choice**: 4 song title options plus an "I don't know" option
 - **Interactive Feedback**: Visual feedback for correct/incorrect answers
 - **Progress Tracking**: Real-time progress updates during the quiz
@@ -18,7 +19,8 @@ A React Native app that tests your knowledge of 80s music through an interactive
 - **Percentage Calculations**: Automatic calculation of success rates
 
 ### 🎯 Quiz Features
-- **Song Recognition**: Uses iTunes API to fetch 80s songs with preview URLs
+- **Personalized Song Selection**: Uses iTunes API to fetch songs from your formative years (ages 15-40)
+- **Fallback Options**: If birthday not provided, uses a mix of popular decades
 - **Randomized Questions**: Each quiz session generates unique questions
 - **Answer Validation**: Immediate feedback on answer selection
 - **Daily Reset**: Quiz limits reset at midnight for fresh daily challenges
@@ -94,14 +96,18 @@ The app supports multiple authentication methods:
 
 ## API Integration
 
-The app uses the iTunes Search API to fetch 80s songs:
-- Endpoint: `https://itunes.apple.com/search?term=1980s&entity=song&limit=100`
+The app uses the iTunes Search API to fetch personalized songs:
+- **Personalized Endpoint**: Searches for songs from years when user was 15-40 years old
+- **Fallback Endpoint**: Uses decade-based searches (70s, 80s, 90s, 2000s, 2010s) if birthday not provided
 - Filters songs with available preview URLs
 - Generates random questions from the song pool
 
 ## Quiz Algorithm
 
-1. **Song Selection**: Randomly selects songs from the 80s catalog
+1. **Personalized Song Selection**: 
+   - Calculates years when user was 15-40 years old
+   - Fetches top songs from those specific years
+   - Falls back to decade mix if birthday not provided
 2. **Question Generation**: Creates multiple choice questions with 3 wrong answers + 1 correct answer
 3. **Answer Validation**: Compares user selection with correct song title
 4. **Progress Tracking**: Updates daily statistics and historical data
@@ -162,8 +168,8 @@ The app includes a comprehensive backend API for user management and progress tr
 - [x] Comprehensive progress tracking (daily, weekly, monthly, yearly, all-time)
 - [x] Achievement system with unlockable badges
 - [x] Leaderboards for accuracy and streaks
+- [x] Personalized music selection based on user age
 - [ ] Difficulty levels (easy, medium, hard)
-- [ ] Different music decades (70s, 90s, etc.)
 - [ ] Social features (challenges, friend competitions)
 - [ ] Offline mode with cached songs
 - [ ] Custom quiz creation

@@ -7,14 +7,7 @@ import { useUserProgress } from '../UserProgressContext';
 import TrackPlayer, { usePlaybackState, State } from 'react-native-track-player';
 import { setupPlayer, addTrack } from '../services/trackPlayerService';
 import { useIsFocused } from '@react-navigation/native';
-
-interface ITunesTrack {
-  trackId: number;
-  trackName: string;
-  artistName: string;
-  artworkUrl100: string;
-  previewUrl: string;
-}
+import musicService, { ITunesTrack } from '../services/musicService';
 
 type Question = {
   id: string;
@@ -144,7 +137,21 @@ const ChecklistScreen = () => {
   const loadTracks = async () => {
     setLoading(true);
     try {
-      const topTracks = await getTop80sTracks();
+      // Set up music service with user ID
+      musicService.setUserId(userId);
+      
+      // Try to get user's music preferences
+      const userPreferences = await musicService.getUserMusicPreferences();
+      
+      let topTracks: ITunesTrack[];
+      if (userPreferences && userPreferences.birthday) {
+        // Use personalized tracks based on user's age range
+        topTracks = await musicService.getPersonalizedTracks(userPreferences.birthday);
+      } else {
+        // Fallback to decade mix for users without birthday
+        topTracks = await musicService.getDecadeMixTracks();
+      }
+      
       setTracks(topTracks);
     } catch (error) {
       console.error('Error loading tracks:', error);
@@ -152,12 +159,6 @@ const ChecklistScreen = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const getTop80sTracks = async (): Promise<ITunesTrack[]> => {
-    const response = await fetch(`https://itunes.apple.com/search?term=1980s&entity=song&limit=100`);
-    const data = await response.json();
-    return data.results.filter((track: ITunesTrack) => track.previewUrl);
   };
 
   const generateQuizQuestions = (): Question[] => {
@@ -486,10 +487,32 @@ const ChecklistScreen = () => {
     );
   };
 
-  const renderStartScreen = () => (
-    <View style={styles.container}>
-      <Text style={styles.title}>80s Music Memory Quiz</Text>
-      <Text style={styles.subtitle}>Test your knowledge of classic 80s songs!</Text>
+  const renderStartScreen = () => {
+    // Get personalized quiz title and description
+    const [quizTitle, setQuizTitle] = useState('Music Memory Quiz');
+    const [quizDescription, setQuizDescription] = useState('Test your knowledge of popular music!');
+    
+    useEffect(() => {
+      const loadQuizInfo = async () => {
+        try {
+          musicService.setUserId(userId);
+          const userPreferences = await musicService.getUserMusicPreferences();
+          const title = musicService.getQuizTitle(userPreferences?.birthday || null);
+          const description = musicService.getQuizDescription(userPreferences?.birthday || null);
+          setQuizTitle(title);
+          setQuizDescription(description);
+        } catch (error) {
+          console.error('Error loading quiz info:', error);
+        }
+      };
+      
+      loadQuizInfo();
+    }, [userId]);
+
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>{quizTitle}</Text>
+        <Text style={styles.subtitle}>{quizDescription}</Text>
       
       {dailyData && (
         <View style={styles.dailyStats}>
@@ -550,7 +573,8 @@ const ChecklistScreen = () => {
         </View>
       )}
     </View>
-  );
+    );
+  };
 
   const renderQuizScreen = () => {
     if (!currentQuestion) return null;

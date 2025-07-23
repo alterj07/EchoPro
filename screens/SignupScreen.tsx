@@ -26,6 +26,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [bio, setBio] = useState('');
+  const [birthday, setBirthday] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [dailyReminder, setDailyReminder] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -52,9 +53,39 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
     return { isValid: true, message: '' };
   };
 
+  const validateBirthday = (birthday: string): { isValid: boolean; message: string } => {
+    if (!birthday.trim()) {
+      return { isValid: false, message: 'Please enter your birthday' };
+    }
+    
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(birthday)) {
+      return { isValid: false, message: 'Please enter birthday in YYYY-MM-DD format' };
+    }
+    
+    const birthDate = new Date(birthday);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    if (age < 13) {
+      return { isValid: false, message: 'You must be at least 13 years old to use this app' };
+    }
+    
+    if (age > 100) {
+      return { isValid: false, message: 'Please enter a valid birthday' };
+    }
+    
+    return { isValid: true, message: '' };
+  };
+
   const handleEmailSignup = async () => {
     // Validation
-    if (!name.trim() || !email.trim() || !password || !confirmPassword) {
+    if (!name.trim() || !email.trim() || !password || !confirmPassword || !birthday.trim()) {
       Alert.alert('Please Complete', 'Please fill in all required fields');
       return;
     }
@@ -72,6 +103,12 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
 
     if (password !== confirmPassword) {
       Alert.alert('Password Mismatch', 'Passwords do not match. Please try again.');
+      return;
+    }
+
+    const birthdayValidation = validateBirthday(birthday);
+    if (!birthdayValidation.isValid) {
+      Alert.alert('Invalid Birthday', birthdayValidation.message);
       return;
     }
 
@@ -94,18 +131,25 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
           reminderTime: '09:00'
         });
         console.log('hi3');
-        // Update user profile with bio if provided
+        // Update user profile with bio and birthday if provided
+        const profileData: any = {
+          joinDate: new Date(),
+          lastActive: new Date()
+        };
+        
         if (bio.trim()) {
-          await progressService.updateProfile({
-            bio: bio.trim(),
-            joinDate: new Date(),
-            lastActive: new Date()
-          });
+          profileData.bio = bio.trim();
         }
+        
+        if (birthday.trim()) {
+          profileData.birthday = birthday.trim();
+        }
+        
+        await progressService.updateProfile(profileData);
         console.log('hi4');
         Alert.alert(
           'Welcome to EchoPro! 🎵',
-          'Your account has been created successfully. Start your 80s music journey!',
+          'Your account has been created successfully. Start your personalized music journey!',
           [{ text: 'Get Started', onPress: () => {} }]
         );
       } catch (preferencesError) {
@@ -223,6 +267,27 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
                   returnKeyType="next"
                 />
                 <Text style={styles.characterCount}>{bio.length}/500</Text>
+              </View>
+
+              {/* Birthday Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Birthday *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="YYYY-MM-DD (e.g., 1990-05-15)"
+                  placeholderTextColor="#888"
+                  value={birthday}
+                  onChangeText={setBirthday}
+                  keyboardType="numeric"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  maxLength={10}
+                  keyboardAppearance="light"
+                  returnKeyType="next"
+                />
+                <Text style={styles.birthdayHint}>
+                  We'll use this to personalize your music quiz experience
+                </Text>
               </View>
 
               {/* Password Input */}
@@ -420,6 +485,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   passwordHint: {
+    fontSize: 14,
+    color: '#666666',
+    marginTop: 12,
+    fontStyle: 'italic',
+    lineHeight: 18,
+  },
+  birthdayHint: {
     fontSize: 14,
     color: '#666666',
     marginTop: 12,

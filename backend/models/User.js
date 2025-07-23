@@ -155,6 +155,10 @@ const userSchema = new mongoose.Schema({
       maxlength: 500,
       default: ''
     },
+    birthday: {
+      type: String,
+      default: null
+    },
     joinDate: {
       type: Date,
       default: Date.now
