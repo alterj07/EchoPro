@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import { useContext } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { FontSizeContext } from '../contexts/fontSizeContext';
 

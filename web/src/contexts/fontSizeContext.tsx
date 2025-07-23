@@ -1,6 +1,6 @@
-import React, { createContext, useState } from 'react';
+import { createContext, useState } from 'react';
 
-export const FontSizeContext = createContext({ fontSize: 22, setFontSize: (size: number) => {} });
+export const FontSizeContext = createContext({ fontSize: 22, setFontSize: (_size: number) => {} });
 
 export const FontSizeProvider = ({ children }: { children: React.ReactNode }) => {
   const [fontSize, setFontSize] = useState(22);

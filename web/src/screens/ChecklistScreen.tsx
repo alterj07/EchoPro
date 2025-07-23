@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { QuizContext } from '../contexts/QuizContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserProgress } from '../contexts/UserProgressContext';
 import musicService from '../services/musicService';

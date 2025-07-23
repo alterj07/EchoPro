@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserProgress } from '../contexts/UserProgressContext';
 import { QuizContext } from '../contexts/QuizContext';
@@ -46,9 +46,7 @@ function DashboardScreen() {
   const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const { quizState } = useContext(QuizContext);
-  const { user } = useAuth();
   const { userProgress, loading: progressLoading } = useUserProgress();
-  const { fontSize } = useContext(FontSizeContext);
 
   const loadHistory = async () => {
     setLoading(true);

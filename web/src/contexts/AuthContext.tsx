@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
 interface User {
@@ -30,7 +30,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(false);
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, _password: string) => {
     setLoading(true);
     try {
       // Simple mock authentication for web
@@ -48,7 +48,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, _password: string) => {
     setLoading(true);
     try {
       // Simple mock registration for web
