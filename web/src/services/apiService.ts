@@ -19,54 +19,207 @@ class ApiService {
       return await response.json();
     } catch (error) {
       console.error('API request failed:', error);
+      // Don't throw the error, let the calling code handle the fallback
       throw error;
+    }
+  }
+
+  // Helper method to check if backend is available
+  private async isBackendAvailable(): Promise<boolean> {
+    try {
+      // Use AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+      
+      const response = await fetch(`${API_BASE_URL.replace('/api', '')}/health`, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      return response.ok;
+    } catch (error) {
+      console.log('Backend not available, using localStorage fallback');
+      return false;
     }
   }
 
   // User endpoints
   async createUser(userId: string, name: string, email: string) {
-    return this.makeRequest('/users/create', {
-      method: 'POST',
-      body: JSON.stringify({ userId, name, email }),
-    });
+    try {
+      if (await this.isBackendAvailable()) {
+        return this.makeRequest('/users/create', {
+          method: 'POST',
+          body: JSON.stringify({ userId, name, email }),
+        });
+      }
+    } catch (error) {
+      console.log('Failed to create user in backend, using localStorage fallback');
+    }
+    
+    // Fallback to localStorage
+    const user = { userId, name, email };
+    localStorage.setItem(`user_${userId}`, JSON.stringify(user));
+    return user;
   }
 
   async getUser(userId: string) {
-    return this.makeRequest(`/users/${userId}`);
+    try {
+      if (await this.isBackendAvailable()) {
+        return this.makeRequest(`/users/${userId}`);
+      }
+    } catch (error) {
+      console.log('Failed to get user from backend, using localStorage fallback');
+    }
+    
+    // Fallback to localStorage
+    const userData = localStorage.getItem(`user_${userId}`);
+    return userData ? JSON.parse(userData) : null;
   }
 
   async updateUserProgress(userId: string, quizData: any) {
-    return this.makeRequest(`/users/${userId}/progress`, {
-      method: 'POST',
-      body: JSON.stringify({ period: 'daily', quizData }),
-    });
+    try {
+      if (await this.isBackendAvailable()) {
+        return this.makeRequest(`/users/${userId}/progress`, {
+          method: 'POST',
+          body: JSON.stringify({ period: 'daily', quizData }),
+        });
+      }
+    } catch (error) {
+      console.log('Failed to update user progress in backend, using localStorage fallback');
+    }
+    
+    // Fallback to localStorage
+    const progressKey = `progress_${userId}_daily`;
+    const existingProgress = localStorage.getItem(progressKey);
+    const progress = existingProgress ? JSON.parse(existingProgress) : { totalQuizzes: 0, totalQuestions: 0, correctAnswers: 0 };
+    
+    progress.totalQuizzes += 1;
+    progress.totalQuestions += quizData.totalQuestions || 0;
+    progress.correctAnswers += quizData.correct || 0;
+    
+    localStorage.setItem(progressKey, JSON.stringify(progress));
+    return progress;
   }
 
   async getUserProgress(userId: string, period: string) {
-    return this.makeRequest(`/users/${userId}/progress/${period}`);
+    try {
+      if (await this.isBackendAvailable()) {
+        return this.makeRequest(`/users/${userId}/progress/${period}`);
+      }
+    } catch (error) {
+      console.log('Failed to get user progress from backend, using localStorage fallback');
+    }
+    
+    // Fallback to localStorage
+    const progressKey = `progress_${userId}_${period}`;
+    const progressData = localStorage.getItem(progressKey);
+    return progressData ? JSON.parse(progressData) : { totalQuizzes: 0, totalQuestions: 0, correctAnswers: 0 };
   }
 
   // Checklist endpoints
   async submitChecklist(userId: string, answers: any[], totalQuestions: number, correctCount: number, skipCount: number, percentage: number) {
-    return this.makeRequest('/checklist/submit', {
-      method: 'POST',
-      body: JSON.stringify({
-        userId,
-        answers,
-        totalQuestions,
-        correctCount,
-        skipCount,
-        percentage,
-      }),
-    });
+    try {
+      if (await this.isBackendAvailable()) {
+        return this.makeRequest('/checklist/submit', {
+          method: 'POST',
+          body: JSON.stringify({
+            userId,
+            answers,
+            totalQuestions,
+            correctCount,
+            skipCount,
+            percentage,
+          }),
+        });
+      }
+    } catch (error) {
+      console.log('Failed to submit checklist to backend, using localStorage fallback');
+    }
+    
+    // Fallback to localStorage
+    const checklistData = {
+      userId,
+      answers,
+      totalQuestions,
+      correctCount,
+      skipCount,
+      percentage,
+      completedAt: new Date().toISOString(),
+    };
+    
+    const checklists = JSON.parse(localStorage.getItem(`checklists_${userId}`) || '[]');
+    checklists.push(checklistData);
+    localStorage.setItem(`checklists_${userId}`, JSON.stringify(checklists));
+    
+    return { success: true, result: checklistData };
   }
 
   async getDashboardData(userId: string, period: string) {
-    return this.makeRequest(`/checklist/dashboard/${userId}/${period}`);
+    try {
+      if (await this.isBackendAvailable()) {
+        return this.makeRequest(`/checklist/dashboard/${userId}/${period}`);
+      }
+    } catch (error) {
+      console.log('Failed to get dashboard data from backend, using localStorage fallback');
+    }
+    
+    // Fallback to localStorage
+    const checklists = JSON.parse(localStorage.getItem(`checklists_${userId}`) || '[]');
+    const now = new Date();
+    let filteredChecklists = checklists;
+    
+    // Filter by period
+    switch (period) {
+      case 'day':
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        filteredChecklists = checklists.filter((c: any) => new Date(c.completedAt) >= today);
+        break;
+      case 'week':
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        filteredChecklists = checklists.filter((c: any) => new Date(c.completedAt) >= weekAgo);
+        break;
+      case 'month':
+        const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        filteredChecklists = checklists.filter((c: any) => new Date(c.completedAt) >= monthAgo);
+        break;
+      case 'year':
+        const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+        filteredChecklists = checklists.filter((c: any) => new Date(c.completedAt) >= yearAgo);
+        break;
+    }
+    
+    const totalPercent = filteredChecklists.length > 0 
+      ? filteredChecklists.reduce((sum: number, c: any) => sum + c.percentage, 0) / filteredChecklists.length 
+      : 0;
+    
+    const history = filteredChecklists.map((c: any) => ({
+      date: new Date(c.completedAt).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+      correct: `${c.correctCount}/${c.totalQuestions}`,
+      skip: c.skipCount,
+      percent: c.percentage,
+      color: c.percentage >= 80 ? '#4ade80' : c.percentage >= 60 ? '#fbbf24' : '#f87171'
+    }));
+    
+    return {
+      period,
+      percent: Math.round(totalPercent),
+      history
+    };
   }
 
   async getRecentResults(userId: string, limit: number = 10) {
-    return this.makeRequest(`/checklist/recent/${userId}?limit=${limit}`);
+    try {
+      if (await this.isBackendAvailable()) {
+        return this.makeRequest(`/checklist/recent/${userId}?limit=${limit}`);
+      }
+    } catch (error) {
+      console.log('Failed to get recent results from backend, using localStorage fallback');
+    }
+    
+    // Fallback to localStorage
+    const checklists = JSON.parse(localStorage.getItem(`checklists_${userId}`) || '[]');
+    return checklists.slice(-limit).reverse();
   }
 }
 

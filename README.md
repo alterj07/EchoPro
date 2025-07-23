@@ -102,6 +102,25 @@ The app uses the iTunes Search API to fetch personalized songs:
 - Filters songs with available preview URLs
 - Generates random questions from the song pool
 
+## Web App Deployment
+
+The web version is deployed on Vercel at [echo-pro.vercel.app](https://echo-pro.vercel.app).
+
+### Current Status
+- ✅ **Frontend**: Deployed and working
+- ✅ **Authentication**: localStorage-based for web
+- ✅ **Quiz Functionality**: Full quiz experience with localStorage fallback
+- ✅ **Dashboard**: Progress tracking and statistics
+- ⚠️ **Backend API**: Needs deployment (currently falls back to localStorage)
+
+### Backend Deployment
+The backend needs to be deployed to enable full functionality. See [web/README.md](web/README.md) for detailed deployment instructions.
+
+**Quick Deployment Options:**
+- **Railway**: Easy deployment with MongoDB integration
+- **Render**: Free tier available with automatic deployments
+- **Heroku**: Traditional deployment option
+
 ## Quiz Algorithm
 
 1. **Personalized Song Selection**: 
