@@ -1,6 +1,17 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { useAuth } from './AuthContext';
-import { UserProgress } from '../services/progressService';
+
+interface UserProgress {
+  overallStats: {
+    totalQuizzesTaken: number;
+    overallAccuracy: number;
+    currentStreak: number;
+    bestQuizScore: number;
+    totalQuestionsAnswered: number;
+    totalTimeSpent: number;
+  };
+}
 
 interface UserProgressContextType {
   userProgress: UserProgress | null;
@@ -28,10 +39,24 @@ export const UserProgressProvider: React.FC<UserProgressProviderProps> = ({ chil
 
     setLoading(true);
     try {
-      const progressService = require('../services/progressService').default;
-      progressService.setUserId(user.uid);
-      const progress = await progressService.getAllProgress();
-      setUserProgress(progress);
+      // For web, we'll use localStorage to simulate progress data
+      const storedProgress = localStorage.getItem(`userProgress_${user.uid}`);
+      if (storedProgress) {
+        setUserProgress(JSON.parse(storedProgress));
+      } else {
+        // Default progress data
+        const defaultProgress: UserProgress = {
+          overallStats: {
+            totalQuizzesTaken: 0,
+            overallAccuracy: 0,
+            currentStreak: 0,
+            bestQuizScore: 0,
+            totalQuestionsAnswered: 0,
+            totalTimeSpent: 0
+          }
+        };
+        setUserProgress(defaultProgress);
+      }
     } catch (error) {
       console.error('Error fetching user progress:', error);
       setUserProgress(null);
@@ -48,9 +73,30 @@ export const UserProgressProvider: React.FC<UserProgressProviderProps> = ({ chil
     if (!user?.uid) return;
 
     try {
-      const progressService = require('../services/progressService').default;
-      progressService.setUserId(user.uid);
-      const updatedProgress = await progressService.updateProgress(quizData);
+      // For web, we'll update localStorage
+      const currentProgress = userProgress || {
+        overallStats: {
+          totalQuizzesTaken: 0,
+          overallAccuracy: 0,
+          currentStreak: 0,
+          bestQuizScore: 0,
+          totalQuestionsAnswered: 0,
+          totalTimeSpent: 0
+        }
+      };
+
+      // Update progress based on quiz data
+      const updatedProgress = {
+        ...currentProgress,
+        overallStats: {
+          ...currentProgress.overallStats,
+          totalQuizzesTaken: currentProgress.overallStats.totalQuizzesTaken + 1,
+          totalQuestionsAnswered: currentProgress.overallStats.totalQuestionsAnswered + (quizData.total || 0),
+          totalTimeSpent: currentProgress.overallStats.totalTimeSpent + (quizData.timeSpent || 0)
+        }
+      };
+
+      localStorage.setItem(`userProgress_${user.uid}`, JSON.stringify(updatedProgress));
       setUserProgress(updatedProgress);
     } catch (error) {
       console.error('Error updating progress:', error);

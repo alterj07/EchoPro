@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_BASE_URL = 'http://localhost:3000/api';
+// Web version of music service
 
 export interface ITunesTrack {
   trackId: number;
@@ -21,17 +19,7 @@ export interface UserMusicPreferences {
 }
 
 class MusicService {
-  private userId: string | null = null;
-
-  setUserId(userId: string) {
-    this.userId = userId;
-  }
-
-  private getHeaders() {
-    return {
-      'Content-Type': 'application/json',
-    };
-  }
+  // Web version - simplified for demo
 
   // Calculate the years when user was 15-40 years old
   calculateAgeRange(birthday: string): { startYear: number; endYear: number; targetYears: number[] } {

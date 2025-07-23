@@ -1,32 +1,13 @@
-import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { initializeApp } from 'firebase/app';
-import {
-  getAuth,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  GoogleAuthProvider,
-  signInWithPopup,
-} from 'firebase/auth';
-import type { User as FirebaseUser } from 'firebase/auth';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 
-// TODO: Replace with your Firebase config
-const firebaseConfig = {
-    apiKey: "AIzaSyDNQRe-47Rd2sRILJLFnxzWrIE03Z5A7Zo",
-    authDomain: "echo-83a97.firebaseapp.com",
-    projectId: "echo-83a97",
-    storageBucket: "echo-83a97.firebasestorage.app",
-    messagingSenderId: "709853471538",
-    appId: "1:709853471538:web:5c6b3138ce60e0930b6d2b",
-    measurementId: "G-ZR0DXM5VNJ"
-  };
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+interface User {
+  uid: string;
+  email: string | null;
+}
 
 interface AuthContextType {
-  user: FirebaseUser | null;
+  user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
@@ -37,21 +18,31 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
-      setLoading(false);
-    });
-    return unsubscribe;
+    // Check for existing user in localStorage
+    const storedUser = localStorage.getItem('currentUser');
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
+    setLoading(false);
   }, []);
 
   const signIn = async (email: string, password: string) => {
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      // Simple mock authentication for web
+      const mockUser: User = {
+        uid: `user_${Date.now()}`,
+        email: email
+      };
+      localStorage.setItem('currentUser', JSON.stringify(mockUser));
+      setUser(mockUser);
+    } catch (error) {
+      console.error('Sign in error:', error);
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -60,7 +51,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signUp = async (email: string, password: string) => {
     setLoading(true);
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      // Simple mock registration for web
+      const mockUser: User = {
+        uid: `user_${Date.now()}`,
+        email: email
+      };
+      localStorage.setItem('currentUser', JSON.stringify(mockUser));
+      setUser(mockUser);
+    } catch (error) {
+      console.error('Sign up error:', error);
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -69,7 +69,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signOut = async () => {
     setLoading(true);
     try {
-      await firebaseSignOut(auth);
+      localStorage.removeItem('currentUser');
+      setUser(null);
+    } catch (error) {
+      console.error('Sign out error:', error);
     } finally {
       setLoading(false);
     }
@@ -78,8 +81,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const googleSignIn = async () => {
     setLoading(true);
     try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      // Mock Google sign in for web
+      const mockUser: User = {
+        uid: `google_user_${Date.now()}`,
+        email: 'user@gmail.com'
+      };
+      localStorage.setItem('currentUser', JSON.stringify(mockUser));
+      setUser(mockUser);
+    } catch (error) {
+      console.error('Google sign in error:', error);
+      throw error;
     } finally {
       setLoading(false);
     }
