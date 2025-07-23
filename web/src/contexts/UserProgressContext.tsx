@@ -42,14 +42,25 @@ export const UserProgressProvider: React.FC<UserProgressProviderProps> = ({ chil
     try {
       // Try to get user progress from backend
       const progress = await apiService.getUserProgress(user.uid, 'all-time');
-      setUserProgress(progress);
+      // Ensure the progress has the expected structure
+      if (progress && progress.overallStats) {
+        setUserProgress(progress);
+      } else {
+        throw new Error('Invalid progress data structure from backend');
+      }
     } catch (error) {
       console.error('Error fetching user progress from backend:', error);
       // Fallback to localStorage if backend fails
       try {
         const storedProgress = localStorage.getItem(`userProgress_${user.uid}`);
         if (storedProgress) {
-          setUserProgress(JSON.parse(storedProgress));
+          const parsed = JSON.parse(storedProgress);
+          // Ensure the stored data has the expected structure
+          if (parsed && parsed.overallStats) {
+            setUserProgress(parsed);
+          } else {
+            throw new Error('Invalid stored progress data structure');
+          }
         } else {
           // Default progress data
           const defaultProgress: UserProgress = {
@@ -66,7 +77,18 @@ export const UserProgressProvider: React.FC<UserProgressProviderProps> = ({ chil
         }
       } catch (localError) {
         console.error('Error with localStorage fallback:', localError);
-        setUserProgress(null);
+        // Set default progress as last resort
+        const defaultProgress: UserProgress = {
+          overallStats: {
+            totalQuizzesTaken: 0,
+            overallAccuracy: 0,
+            currentStreak: 0,
+            bestQuizScore: 0,
+            totalQuestionsAnswered: 0,
+            totalTimeSpent: 0
+          }
+        };
+        setUserProgress(defaultProgress);
       }
     } finally {
       setLoading(false);

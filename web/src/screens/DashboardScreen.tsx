@@ -317,7 +317,7 @@ function DashboardScreen() {
           </div>
         )}
 
-        {userProgress && (
+        {userProgress && userProgress.overallStats && (
           <div style={{
             backgroundColor: '#FFFFFF',
             padding: '24px',
@@ -355,7 +355,7 @@ function DashboardScreen() {
                   Total Quizzes
                 </div>
                 <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2563EB' }}>
-                  {userProgress.overallStats.totalQuizzesTaken}
+                  {userProgress.overallStats.totalQuizzesTaken || 0}
                 </div>
               </div>
               <div style={{
@@ -371,7 +371,7 @@ function DashboardScreen() {
                   Overall Accuracy
                 </div>
                 <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#4CAF50' }}>
-                  {userProgress.overallStats.overallAccuracy.toFixed(1)}%
+                  {(userProgress.overallStats.overallAccuracy || 0).toFixed(1)}%
                 </div>
               </div>
               <div style={{
@@ -387,7 +387,7 @@ function DashboardScreen() {
                   Current Streak
                 </div>
                 <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#FF9800' }}>
-                  {userProgress.overallStats.currentStreak} days
+                  {userProgress.overallStats.currentStreak || 0} days
                 </div>
               </div>
               <div style={{
@@ -403,16 +403,16 @@ function DashboardScreen() {
                   Best Score
                 </div>
                 <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#9C27B0' }}>
-                  {userProgress.overallStats.bestQuizScore.toFixed(1)}%
+                  {(userProgress.overallStats.bestQuizScore || 0).toFixed(1)}%
                 </div>
               </div>
             </div>
             <div style={{ marginTop: '8px' }}>
               <div style={{ fontSize: '18px', fontWeight: '600', color: '#1A1A1A', marginBottom: '8px' }}>
-                Total Questions: {userProgress.overallStats.totalQuestionsAnswered}
+                Total Questions: {userProgress.overallStats.totalQuestionsAnswered || 0}
               </div>
               <div style={{ fontSize: '18px', fontWeight: '600', color: '#1A1A1A', marginBottom: '8px' }}>
-                Total Time: {formatTime(userProgress.overallStats.totalTimeSpent)}
+                Total Time: {formatTime(userProgress.overallStats.totalTimeSpent || 0)}
               </div>
             </div>
           </div>

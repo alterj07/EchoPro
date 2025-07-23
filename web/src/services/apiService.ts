@@ -80,10 +80,21 @@ class ApiService {
   async updateUserProgress(userId: string, quizData: any) {
     try {
       if (await this.isBackendAvailable()) {
-        return this.makeRequest(`/users/${userId}/progress`, {
+        const backendProgress = await this.makeRequest(`/users/${userId}/progress`, {
           method: 'POST',
           body: JSON.stringify({ period: 'daily', quizData }),
         });
+        // Convert backend format to expected format
+        return {
+          overallStats: {
+            totalQuizzesTaken: backendProgress.totalQuizzes || 0,
+            overallAccuracy: backendProgress.totalQuestions > 0 ? (backendProgress.correctAnswers / backendProgress.totalQuestions) * 100 : 0,
+            currentStreak: backendProgress.currentStreak || 0,
+            bestQuizScore: backendProgress.bestQuizScore || 0,
+            totalQuestionsAnswered: backendProgress.totalQuestions || 0,
+            totalTimeSpent: backendProgress.totalTimeSpent || 0
+          }
+        };
       }
     } catch (error) {
       console.log('Failed to update user progress in backend, using localStorage fallback');
@@ -92,11 +103,48 @@ class ApiService {
     // Fallback to localStorage
     const progressKey = `progress_${userId}_daily`;
     const existingProgress = localStorage.getItem(progressKey);
-    const progress = existingProgress ? JSON.parse(existingProgress) : { totalQuizzes: 0, totalQuestions: 0, correctAnswers: 0 };
+    let progress;
     
-    progress.totalQuizzes += 1;
-    progress.totalQuestions += quizData.totalQuestions || 0;
-    progress.correctAnswers += quizData.correct || 0;
+    if (existingProgress) {
+      const parsed = JSON.parse(existingProgress);
+      if (parsed.overallStats) {
+        progress = parsed;
+      } else {
+        // Convert old format
+        progress = {
+          overallStats: {
+            totalQuizzesTaken: parsed.totalQuizzes || 0,
+            overallAccuracy: parsed.totalQuestions > 0 ? (parsed.correctAnswers / parsed.totalQuestions) * 100 : 0,
+            currentStreak: parsed.currentStreak || 0,
+            bestQuizScore: parsed.bestQuizScore || 0,
+            totalQuestionsAnswered: parsed.totalQuestions || 0,
+            totalTimeSpent: parsed.totalTimeSpent || 0
+          }
+        };
+      }
+    } else {
+      progress = {
+        overallStats: {
+          totalQuizzesTaken: 0,
+          overallAccuracy: 0,
+          currentStreak: 0,
+          bestQuizScore: 0,
+          totalQuestionsAnswered: 0,
+          totalTimeSpent: 0
+        }
+      };
+    }
+    
+    // Update progress
+    progress.overallStats.totalQuizzesTaken += 1;
+    progress.overallStats.totalQuestionsAnswered += quizData.totalQuestions || 0;
+    progress.overallStats.totalTimeSpent += quizData.timeSpent || 0;
+    
+    // Update accuracy
+    if (progress.overallStats.totalQuestionsAnswered > 0) {
+      const correctAnswers = (progress.overallStats.overallAccuracy / 100) * (progress.overallStats.totalQuestionsAnswered - (quizData.totalQuestions || 0)) + (quizData.correct || 0);
+      progress.overallStats.overallAccuracy = (correctAnswers / progress.overallStats.totalQuestionsAnswered) * 100;
+    }
     
     localStorage.setItem(progressKey, JSON.stringify(progress));
     return progress;
@@ -105,7 +153,18 @@ class ApiService {
   async getUserProgress(userId: string, period: string) {
     try {
       if (await this.isBackendAvailable()) {
-        return this.makeRequest(`/users/${userId}/progress/${period}`);
+        const backendProgress = await this.makeRequest(`/users/${userId}/progress/${period}`);
+        // Convert backend format to expected format
+        return {
+          overallStats: {
+            totalQuizzesTaken: backendProgress.totalQuizzes || 0,
+            overallAccuracy: backendProgress.totalQuestions > 0 ? (backendProgress.correctAnswers / backendProgress.totalQuestions) * 100 : 0,
+            currentStreak: backendProgress.currentStreak || 0,
+            bestQuizScore: backendProgress.bestQuizScore || 0,
+            totalQuestionsAnswered: backendProgress.totalQuestions || 0,
+            totalTimeSpent: backendProgress.totalTimeSpent || 0
+          }
+        };
       }
     } catch (error) {
       console.log('Failed to get user progress from backend, using localStorage fallback');
@@ -114,7 +173,37 @@ class ApiService {
     // Fallback to localStorage
     const progressKey = `progress_${userId}_${period}`;
     const progressData = localStorage.getItem(progressKey);
-    return progressData ? JSON.parse(progressData) : { totalQuizzes: 0, totalQuestions: 0, correctAnswers: 0 };
+    if (progressData) {
+      const parsed = JSON.parse(progressData);
+      // Ensure it has the expected structure
+      if (parsed.overallStats) {
+        return parsed;
+      } else {
+        // Convert old format to new format
+        return {
+          overallStats: {
+            totalQuizzesTaken: parsed.totalQuizzes || 0,
+            overallAccuracy: parsed.totalQuestions > 0 ? (parsed.correctAnswers / parsed.totalQuestions) * 100 : 0,
+            currentStreak: parsed.currentStreak || 0,
+            bestQuizScore: parsed.bestQuizScore || 0,
+            totalQuestionsAnswered: parsed.totalQuestions || 0,
+            totalTimeSpent: parsed.totalTimeSpent || 0
+          }
+        };
+      }
+    }
+    
+    // Default structure
+    return {
+      overallStats: {
+        totalQuizzesTaken: 0,
+        overallAccuracy: 0,
+        currentStreak: 0,
+        bestQuizScore: 0,
+        totalQuestionsAnswered: 0,
+        totalTimeSpent: 0
+      }
+    };
   }
 
   // Checklist endpoints

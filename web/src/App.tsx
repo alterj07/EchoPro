@@ -13,6 +13,9 @@ import ChecklistScreen from './screens/ChecklistScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import PlayScreen from './screens/PlayScreen';
 
+// Import components
+import ConnectionStatus from './components/ConnectionStatus';
+
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -136,6 +139,7 @@ const AppContent: React.FC = () => {
   return (
     <Router>
       <div style={{ width: '100%', height: '100vh', background: '#F8FAFC' }}>
+        <ConnectionStatus />
         <Navigation />
         <Routes>
           {/* Public Routes */}
