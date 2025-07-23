@@ -53,11 +53,13 @@ const Navigation: React.FC = () => {
       marginBottom: 20
     }}>
       <div style={{
-        maxWidth: 1200,
+        width: '100%',
+        maxWidth: '100%',
         margin: '0 auto',
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center'
+        alignItems: 'center',
+        padding: '0 24px'
       }}>
         <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
           <Link to="/dashboard" style={{
@@ -133,7 +135,7 @@ const Navigation: React.FC = () => {
 const AppContent: React.FC = () => {
   return (
     <Router>
-      <div style={{ minHeight: '100vh', background: '#F8FAFC' }}>
+      <div style={{ width: '100%', height: '100vh', background: '#F8FAFC' }}>
         <Navigation />
         <Routes>
           {/* Public Routes */}

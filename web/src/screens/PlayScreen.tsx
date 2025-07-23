@@ -2,8 +2,8 @@
 
 function PlayScreen() {
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
-      <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ width: '100%', minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
+      <div style={{ padding: '24px', width: '100%', maxWidth: '100%', margin: '0 auto' }}>
         <h1 style={{ 
           fontSize: '32px', 
           fontWeight: 'bold', 

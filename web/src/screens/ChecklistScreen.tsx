@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserProgress } from '../contexts/UserProgressContext';
 import musicService from '../services/musicService';
+import apiService from '../services/apiService';
 import type { ITunesTrack } from '../services/musicService';
 
 type Question = {
@@ -251,8 +252,8 @@ const ChecklistScreen = () => {
       total: questions.length,
     };
     
-    // Save to localStorage
     try {
+      // Save to localStorage for immediate UI updates
       const existingHistory = localStorage.getItem(QUIZ_HISTORY_KEY);
       const history = existingHistory ? JSON.parse(existingHistory) : [];
       history.push(quizData);
@@ -269,8 +270,30 @@ const ChecklistScreen = () => {
       localStorage.setItem(DAILY_QUIZ_KEY, JSON.stringify(dailyData));
       setDailyData(dailyData);
       
-      // Update progress in backend
+      // Submit to backend
       if (user?.uid) {
+        // Prepare answers for backend
+        const answers = questions.map(q => ({
+          question: `Who is the artist of "${q.track.trackName}"?`,
+          selectedAnswer: q.userAnswer || 'skipped',
+          correctAnswer: q.correctAnswer,
+          isCorrect: q.status === 'correct',
+          isSkipped: q.status === 'skipped'
+        }));
+        
+        const percentage = questions.length > 0 ? (correct / questions.length) * 100 : 0;
+        
+        // Submit to backend
+        await apiService.submitChecklist(
+          user.uid,
+          answers,
+          questions.length,
+          correct,
+          skipped,
+          percentage
+        );
+        
+        // Update progress context
         await updateProgress(quizData);
       }
     } catch (error) {
@@ -281,7 +304,7 @@ const ChecklistScreen = () => {
   };
 
   const renderStartScreen = () => (
-    <div style={{ padding: 20, textAlign: 'center' }}>
+    <div style={{ padding: 20, textAlign: 'center', width: '100%', maxWidth: '100%' }}>
       <h1 style={{ fontSize: 32, fontWeight: 'bold', marginBottom: 16 }}>Music Memory Quiz</h1>
       <p style={{ fontSize: 18, color: '#666', marginBottom: 32 }}>
         Test your memory with popular music! Listen to song previews and identify the artist.
@@ -319,7 +342,7 @@ const ChecklistScreen = () => {
     if (!currentQuestion) return null;
     
     return (
-      <div style={{ padding: 20, maxWidth: 600, margin: '0 auto' }}>
+      <div style={{ padding: 20, width: '100%', maxWidth: '100%', margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <h2 style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 8 }}>
             Question {currentQuestionIndex + 1} of {questions.length}
@@ -435,7 +458,7 @@ const ChecklistScreen = () => {
     const percentage = total > 0 ? (correct / total) * 100 : 0;
     
     return (
-      <div style={{ padding: 20, textAlign: 'center' }}>
+      <div style={{ padding: 20, textAlign: 'center', width: '100%', maxWidth: '100%' }}>
         <h1 style={{ fontSize: 32, fontWeight: 'bold', marginBottom: 16 }}>Quiz Complete!</h1>
         
         <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.1)', marginBottom: 24 }}>
@@ -496,7 +519,7 @@ const ChecklistScreen = () => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F8FAFC' }}>
+    <div style={{ width: '100%', minHeight: '100vh', background: '#F8FAFC' }}>
       {screen === 'start' && renderStartScreen()}
       {screen === 'quiz' && renderQuizScreen()}
       {screen === 'results' && renderResultsScreen()}

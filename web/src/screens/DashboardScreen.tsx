@@ -1,6 +1,8 @@
 import { useState, useContext, useEffect } from 'react';
 import { useUserProgress } from '../contexts/UserProgressContext';
 import { QuizContext } from '../contexts/QuizContext';
+import apiService from '../services/apiService';
+import { useAuth } from '../contexts/AuthContext';
 
 type Period = 'day' | 'week' | 'month' | 'year' | 'all';
 
@@ -45,11 +47,34 @@ function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const { quizState } = useContext(QuizContext);
   const { userProgress, loading: progressLoading } = useUserProgress();
+  const { user } = useAuth();
 
   const loadHistory = async () => {
     setLoading(true);
     try {
-      // For web, we'll use localStorage instead of AsyncStorage
+      if (user?.uid) {
+        // Try to get data from backend first
+        try {
+          const dashboardData = await apiService.getDashboardData(user.uid, period);
+          if (dashboardData && dashboardData.history) {
+            // Convert backend data format to our format
+            const history: QuizResult[] = dashboardData.history.map((item: any) => ({
+              date: item.date,
+              correct: item.correct || 0,
+              incorrect: item.incorrect || 0,
+              skipped: item.skipped || 0,
+              total: (item.correct || 0) + (item.incorrect || 0) + (item.skipped || 0)
+            }));
+            const data = processQuizHistory(history, period);
+            setPerformanceData(data);
+            return;
+          }
+        } catch (backendError) {
+          console.error('Failed to load from backend, falling back to localStorage:', backendError);
+        }
+      }
+      
+      // Fallback to localStorage
       const historyJson = localStorage.getItem('quizHistory');
       const history: QuizResult[] = historyJson ? JSON.parse(historyJson) : [];
       const data = processQuizHistory(history, period);
@@ -176,7 +201,7 @@ function DashboardScreen() {
 
   useEffect(() => {
     loadHistory();
-  }, [period]);
+  }, [period, user?.uid]);
 
   const liveCorrect = quizState?.correctCount ?? 0;
   const liveIncorrect = quizState?.incorrectCount ?? 0;
@@ -203,8 +228,8 @@ function DashboardScreen() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
-      <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ width: '100%', minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
+      <div style={{ padding: '24px', width: '100%', maxWidth: '100%', margin: '0 auto' }}>
         <div style={{ 
           display: 'flex', 
           justifyContent: 'space-between', 

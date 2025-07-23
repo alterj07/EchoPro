@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import apiService from '../services/apiService';
 
 interface User {
   uid: string;
@@ -38,6 +39,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         uid: `user_${Date.now()}`,
         email: email
       };
+      
+      // Create user in backend
+      try {
+        await apiService.createUser(mockUser.uid, email.split('@')[0], email);
+      } catch (backendError) {
+        console.error('Failed to create user in backend:', backendError);
+        // Continue anyway, user can still use the app
+      }
+      
       localStorage.setItem('currentUser', JSON.stringify(mockUser));
       setUser(mockUser);
     } catch (error) {
@@ -56,6 +66,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         uid: `user_${Date.now()}`,
         email: email
       };
+      
+      // Create user in backend
+      try {
+        await apiService.createUser(mockUser.uid, email.split('@')[0], email);
+      } catch (backendError) {
+        console.error('Failed to create user in backend:', backendError);
+        // Continue anyway, user can still use the app
+      }
+      
       localStorage.setItem('currentUser', JSON.stringify(mockUser));
       setUser(mockUser);
     } catch (error) {
