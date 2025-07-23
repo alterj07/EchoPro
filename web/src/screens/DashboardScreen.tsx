@@ -1,8 +1,6 @@
 import { useState, useContext, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
 import { useUserProgress } from '../contexts/UserProgressContext';
 import { QuizContext } from '../contexts/QuizContext';
-import { FontSizeContext } from '../contexts/fontSizeContext';
 
 type Period = 'day' | 'week' | 'month' | 'year' | 'all';
 
