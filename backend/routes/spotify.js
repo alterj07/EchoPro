@@ -1,6 +1,6 @@
 const config = {
-    clientId: 'YOUR_CLIENT_ID',
-    redirectUrl: 'myapp://callback', // or http://localhost:8080/callback if testing in browser
+    clientId: process.env.SPOTIFY_CLIENT_ID || 'YOUR_CLIENT_ID',
+    redirectUrl: process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/callback` : 'https://echo-pro.vercel.app/callback',
     scopes: [
       'user-read-email',
       'playlist-read-private',
