@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import Slider from '@react-native-community/slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QuizContext } from '../QuizContext';
 import { useAuth } from '../AuthContext';
@@ -42,8 +43,9 @@ const ChecklistScreen = () => {
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [feedbackType, setFeedbackType] = useState<'correct' | 'incorrect' | 'neutral'>('neutral');
+  const [volume, setVolume] = useState(0.5);
   
-  const { quizState, setQuizState } = useContext(QuizContext);
+  const { quizState, setQuizState, saveQuizState, loadQuizState, clearQuizState, updateQuizProgress } = useContext(QuizContext);
   const { user } = useAuth();
   const { updateProgress } = useUserProgress();
   const playbackState = usePlaybackState();
@@ -62,6 +64,45 @@ const ChecklistScreen = () => {
     setupAudioPlayer();
   }, [userId]); // Reload when user changes
 
+  // Load saved quiz state only once when component mounts
+  useEffect(() => {
+    loadSavedQuizState();
+  }, []); // Empty dependency array - only run once
+
+  // Load saved quiz state when component mounts
+  const loadSavedQuizState = async () => {
+    if (!user?.uid) return;
+    
+    try {
+      const savedState = await loadQuizState(user.uid);
+      if (savedState) {
+        console.log('Loading saved quiz state:', savedState);
+        // Restore quiz state but don't automatically switch to quiz screen
+        setQuestions(savedState.questions);
+        setCurrentQuestionIndex(savedState.currentQuestionIndex);
+        setCurrentQuestion(savedState.questions[savedState.currentQuestionIndex]);
+        
+        // Update QuizContext
+        setQuizState(savedState);
+        
+        // Update daily data to match saved state
+        const updatedDailyData = {
+          date: new Date().toISOString().split('T')[0],
+          questionsAnswered: savedState.correctCount + savedState.incorrectCount + savedState.skippedCount,
+          correct: savedState.correctCount,
+          incorrect: savedState.incorrectCount,
+          skipped: savedState.skippedCount,
+        };
+        setDailyData(updatedDailyData);
+        await AsyncStorage.setItem(DAILY_QUIZ_KEY, JSON.stringify(updatedDailyData));
+      } else {
+        console.log('No saved quiz state found');
+      }
+    } catch (error) {
+      console.error('Error loading saved quiz state:', error);
+    }
+  };
+
   useEffect(() => {
     if (screen === 'quiz' && currentQuestion) {
       startQuestion();
@@ -77,6 +118,10 @@ const ChecklistScreen = () => {
   useEffect(() => {
     if (!isFocused) {
       stopMusic();
+      // Save quiz state when leaving the screen
+      if (user?.uid && quizState) {
+        saveQuizState(user.uid);
+      }
     }
     // Cleanup on unmount as well
     return () => {
@@ -212,14 +257,24 @@ const ChecklistScreen = () => {
     setCurrentQuestion(quizQuestions[0]);
     setScreen('quiz');
 
-    // Update QuizContext
-    setQuizState({
+    // Create initial quiz state with start time
+    const initialQuizState = {
       questions: quizQuestions,
       currentQuestionIndex: 0,
       correctCount: dailyData.correct,
       incorrectCount: dailyData.incorrect,
       skippedCount: dailyData.skipped,
-    });
+      quizId: `quiz_${Date.now()}`,
+      startTime: Date.now(),
+    };
+
+    // Update QuizContext
+    setQuizState(initialQuizState);
+
+    // Save quiz state
+    if (user?.uid) {
+      await saveQuizState(user.uid);
+    }
   };
 
   const startQuestion = async () => {
@@ -292,6 +347,16 @@ const ChecklistScreen = () => {
     }
   };
 
+  const handleVolumeChange = async (value: number) => {
+    console.log('Volume changed to:', value);
+    setVolume(value);
+    try {
+      await TrackPlayer.setVolume(value);
+    } catch (error) {
+      console.error('Error setting volume:', error);
+    }
+  };
+
   const showAnswerFeedback = (status: 'correct' | 'incorrect' | 'skipped') => {
     let message = '';
     let type: 'correct' | 'incorrect' | 'neutral' = 'neutral';
@@ -361,14 +426,35 @@ const ChecklistScreen = () => {
     setDailyData(updatedDailyData);
     await AsyncStorage.setItem(DAILY_QUIZ_KEY, JSON.stringify(updatedDailyData));
 
-    // Update QuizContext
-    setQuizState({
+    // Update QuizContext with new state
+    const updatedQuizState = {
+      ...quizState!,
       questions: updatedQuestions,
       currentQuestionIndex,
       correctCount: updatedDailyData.correct,
       incorrectCount: updatedDailyData.incorrect,
       skippedCount: updatedDailyData.skipped,
-    });
+    };
+    setQuizState(updatedQuizState);
+
+    // Save quiz state after each question
+    if (user?.uid) {
+      await saveQuizState(user.uid);
+    }
+
+    // Update progress immediately after each question
+    try {
+      await updateProgress({
+        quizId: updatedQuizState.quizId || `quiz_${Date.now()}`,
+        totalQuestions: updatedDailyData.questionsAnswered,
+        correct: updatedDailyData.correct,
+        incorrect: updatedDailyData.incorrect,
+        skipped: updatedDailyData.skipped,
+        timeSpent: 0 // TODO: Calculate actual time spent
+      });
+    } catch (progressError) {
+      console.error('Error updating progress:', progressError);
+    }
 
     // Save to quiz history
     await saveQuizHistory(updatedDailyData);
@@ -380,6 +466,10 @@ const ChecklistScreen = () => {
         setCurrentQuestionIndex(nextIndex);
         setCurrentQuestion(updatedQuestions[nextIndex]);
       } else {
+        // Clear quiz state when quiz is completed
+        if (user?.uid) {
+          clearQuizState(user.uid);
+        }
         setScreen('results');
       }
     }, 2500); // Slightly longer than feedback display
@@ -562,6 +652,17 @@ const ChecklistScreen = () => {
             </Text>
           </TouchableOpacity>
           
+          {/* Continue Quiz Button */}
+          {quizState && (
+            <TouchableOpacity 
+              style={[styles.button, styles.continueButton]} 
+              onPress={() => setScreen('quiz')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.buttonText}>🔄 Continue Quiz ({quizState.correctCount + quizState.incorrectCount + quizState.skippedCount}/{questions.length})</Text>
+            </TouchableOpacity>
+          )}
+          
           {/* Developer Reset Button */}
           <TouchableOpacity 
             style={styles.resetButton} 
@@ -650,6 +751,32 @@ const ChecklistScreen = () => {
             <Text style={styles.timeText}>
               {Math.floor(playbackDuration)}s / {maxPlaybackTime}s
             </Text>
+          </View>
+          
+          <View style={styles.volumeContainer}>
+            <Text style={styles.volumeLabel}>Volume Control</Text>
+            <Text style={{ fontSize: 12, color: '#666', marginBottom: 5 }}>Current: {Math.round(volume * 100)}%</Text>
+            <Slider
+              style={styles.volumeSlider}
+              minimumValue={0}
+              maximumValue={1}
+              value={volume}
+              onValueChange={handleVolumeChange}
+              minimumTrackTintColor="#2563EB"
+              maximumTrackTintColor="#E0E0E0"
+            />
+            <Text style={styles.volumeText}>Drag to adjust volume</Text>
+            <TouchableOpacity 
+              style={{ 
+                backgroundColor: '#2563EB', 
+                padding: 8, 
+                borderRadius: 5, 
+                marginTop: 10 
+              }}
+              onPress={() => console.log('Volume slider test button pressed')}
+            >
+              <Text style={{ color: 'white', fontSize: 12 }}>Test Volume Slider</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -1159,6 +1286,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginTop: 5,
+  },
+  volumeContainer: {
+    marginTop: 20,
+    alignItems: 'center',
+    width: '100%',
+    backgroundColor: '#F8FAFC',
+    padding: 15,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  volumeLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 10,
+  },
+  volumeSlider: {
+    width: '100%',
+    height: 40,
+  },
+  volumeText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 5,
+  },
+  continueButton: {
+    backgroundColor: '#10B981',
+    marginTop: 10,
   },
 });
 

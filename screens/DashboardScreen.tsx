@@ -228,10 +228,19 @@ function DashboardScreen() {
   };
 
   useEffect(() => {
+    console.log('DashboardScreen: isFocused =', isFocused);
     if (isFocused) {
       loadHistory();
     }
   }, [isFocused, period, userId]); // Reload when user changes
+
+  // Refresh dashboard when quiz state changes
+  useEffect(() => {
+    if (isFocused && quizState) {
+      console.log('DashboardScreen: Quiz state changed, refreshing...');
+      loadHistory();
+    }
+  }, [quizState, isFocused]);
 
   const liveCorrect = quizState?.correctCount ?? 0;
   const liveIncorrect = quizState?.incorrectCount ?? 0;

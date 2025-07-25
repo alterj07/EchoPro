@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserProgress } from '../contexts/UserProgressContext';
+import { QuizContext } from '../contexts/QuizContext';
 import musicService from '../services/musicService';
 import apiService from '../services/apiService';
 import type { ITunesTrack } from '../services/musicService';
@@ -38,9 +39,11 @@ const ChecklistScreen = () => {
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [feedbackType, setFeedbackType] = useState<'correct' | 'incorrect' | 'neutral'>('neutral');
+  const [volume, setVolume] = useState(0.5);
   
   const { user } = useAuth();
   const { updateProgress } = useUserProgress();
+  const { quizState, setQuizState, saveQuizState, loadQuizState, clearQuizState, updateQuizProgress } = useContext(QuizContext);
   const autoStopRef = useRef<number | null>(null);
   
   const userId = user?.uid || 'anonymous';
@@ -50,7 +53,39 @@ const ChecklistScreen = () => {
   useEffect(() => {
     loadDailyQuizData();
     loadTracks();
+    loadSavedQuizState();
   }, [userId]);
+
+  // Load saved quiz state when component mounts
+  const loadSavedQuizState = async () => {
+    if (!user?.uid) return;
+    
+    try {
+      const savedState = await loadQuizState(user.uid);
+      if (savedState) {
+        // Restore quiz state but don't automatically switch to quiz screen
+        setQuestions(savedState.questions);
+        setCurrentQuestionIndex(savedState.currentQuestionIndex);
+        setCurrentQuestion(savedState.questions[savedState.currentQuestionIndex]);
+        
+        // Update QuizContext
+        setQuizState(savedState);
+        
+        // Update daily data to match saved state
+        const updatedDailyData = {
+          date: new Date().toISOString().split('T')[0],
+          questionsAnswered: savedState.correctCount + savedState.incorrectCount + savedState.skippedCount,
+          correct: savedState.correctCount,
+          incorrect: savedState.incorrectCount,
+          skipped: savedState.skippedCount,
+        };
+        setDailyData(updatedDailyData);
+        localStorage.setItem(DAILY_QUIZ_KEY, JSON.stringify(updatedDailyData));
+      }
+    } catch (error) {
+      console.error('Error loading saved quiz state:', error);
+    }
+  };
 
   useEffect(() => {
     if (screen === 'quiz' && currentQuestion) {
@@ -118,6 +153,25 @@ const ChecklistScreen = () => {
     setCurrentQuestionIndex(0);
     setCurrentQuestion(newQuestions[0]);
     setScreen('quiz');
+
+    // Create initial quiz state with start time
+    const initialQuizState = {
+      questions: newQuestions,
+      currentQuestionIndex: 0,
+      correctCount: dailyData?.correct || 0,
+      incorrectCount: dailyData?.incorrect || 0,
+      skippedCount: dailyData?.skipped || 0,
+      quizId: `quiz_${Date.now()}`,
+      startTime: Date.now(),
+    };
+
+    // Update QuizContext
+    setQuizState(initialQuizState);
+
+    // Save quiz state
+    if (user?.uid) {
+      await saveQuizState(user.uid);
+    }
   };
 
   const startQuestion = async () => {
@@ -166,6 +220,15 @@ const ChecklistScreen = () => {
     }
   };
 
+  const handleVolumeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const newVolume = parseFloat(event.target.value);
+    console.log('Volume changed to:', newVolume);
+    setVolume(newVolume);
+    if (audio) {
+      audio.volume = newVolume;
+    }
+  };
+
   const showAnswerFeedback = (status: 'correct' | 'incorrect' | 'skipped') => {
     stopMusic();
     
@@ -211,11 +274,65 @@ const ChecklistScreen = () => {
       status,
     };
     setQuestions(updatedQuestions);
+
+    // Update daily data
+    let updatedDailyData: DailyQuizData;
+    if (!dailyData) {
+      updatedDailyData = {
+        date: new Date().toISOString().split('T')[0],
+        questionsAnswered: 0,
+        correct: 0,
+        incorrect: 0,
+        skipped: 0,
+      };
+    } else {
+      updatedDailyData = { ...dailyData };
+    }
+    
+    updatedDailyData.questionsAnswered += 1;
+    if (status === 'correct') {
+      updatedDailyData.correct += 1;
+    } else {
+      updatedDailyData.incorrect += 1;
+    }
+    
+    setDailyData(updatedDailyData);
+    localStorage.setItem(DAILY_QUIZ_KEY, JSON.stringify(updatedDailyData));
+
+    // Update QuizContext with new state
+    const updatedQuizState = {
+      ...quizState!,
+      questions: updatedQuestions,
+      currentQuestionIndex,
+      correctCount: updatedDailyData.correct,
+      incorrectCount: updatedDailyData.incorrect,
+      skippedCount: updatedDailyData.skipped,
+    };
+    setQuizState(updatedQuizState);
+
+    // Save quiz state after each question
+    if (user?.uid) {
+      await saveQuizState(user.uid);
+    }
+
+    // Update progress immediately after each question
+    try {
+      await updateProgress({
+        quizId: updatedQuizState.quizId || `quiz_${Date.now()}`,
+        totalQuestions: updatedDailyData.questionsAnswered,
+        correct: updatedDailyData.correct,
+        incorrect: updatedDailyData.incorrect,
+        skipped: updatedDailyData.skipped,
+        timeSpent: 0 // TODO: Calculate actual time spent
+      });
+    } catch (progressError) {
+      console.error('Error updating progress:', progressError);
+    }
     
     showAnswerFeedback(status);
   };
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
     if (!currentQuestion) return;
     
     const updatedQuestions = [...questions];
@@ -224,6 +341,56 @@ const ChecklistScreen = () => {
       status: 'skipped',
     };
     setQuestions(updatedQuestions);
+
+    // Update daily data
+    let updatedDailyData: DailyQuizData;
+    if (!dailyData) {
+      updatedDailyData = {
+        date: new Date().toISOString().split('T')[0],
+        questionsAnswered: 0,
+        correct: 0,
+        incorrect: 0,
+        skipped: 0,
+      };
+    } else {
+      updatedDailyData = { ...dailyData };
+    }
+    
+    updatedDailyData.questionsAnswered += 1;
+    updatedDailyData.skipped += 1;
+    
+    setDailyData(updatedDailyData);
+    localStorage.setItem(DAILY_QUIZ_KEY, JSON.stringify(updatedDailyData));
+
+    // Update QuizContext with new state
+    const updatedQuizState = {
+      ...quizState!,
+      questions: updatedQuestions,
+      currentQuestionIndex,
+      correctCount: updatedDailyData.correct,
+      incorrectCount: updatedDailyData.incorrect,
+      skippedCount: updatedDailyData.skipped,
+    };
+    setQuizState(updatedQuizState);
+
+    // Save quiz state after each question
+    if (user?.uid) {
+      await saveQuizState(user.uid);
+    }
+
+    // Update progress immediately after each question
+    try {
+      await updateProgress({
+        quizId: updatedQuizState.quizId || `quiz_${Date.now()}`,
+        totalQuestions: updatedDailyData.questionsAnswered,
+        correct: updatedDailyData.correct,
+        incorrect: updatedDailyData.incorrect,
+        skipped: updatedDailyData.skipped,
+        timeSpent: 0 // TODO: Calculate actual time spent
+      });
+    } catch (progressError) {
+      console.error('Error updating progress:', progressError);
+    }
     
     showAnswerFeedback('skipped');
   };
@@ -300,6 +467,11 @@ const ChecklistScreen = () => {
       console.error('Error saving quiz data:', error);
     }
     
+    // Clear quiz state when quiz is completed
+    if (user?.uid) {
+      await clearQuizState(user.uid);
+    }
+    
     setScreen('results');
   };
 
@@ -331,10 +503,30 @@ const ChecklistScreen = () => {
           borderRadius: 8,
           cursor: loading ? 'not-allowed' : 'pointer',
           opacity: loading ? 0.7 : 1,
+          marginBottom: 12,
         }}
       >
         {loading ? 'Loading...' : 'Start Quiz'}
       </button>
+      
+      {quizState && (
+        <button
+          onClick={() => setScreen('quiz')}
+          style={{
+            padding: '16px 32px',
+            fontSize: 18,
+            fontWeight: 'bold',
+            background: '#10B981',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 8,
+            cursor: 'pointer',
+            marginBottom: 12,
+          }}
+        >
+          🔄 Continue Quiz ({quizState.correctCount + quizState.incorrectCount + quizState.skippedCount}/{questions.length})
+        </button>
+      )}
     </div>
   );
 
@@ -381,6 +573,60 @@ const ChecklistScreen = () => {
             >
               ⏹️ Stop
             </button>
+          </div>
+          
+          <div style={{ 
+            marginBottom: 16, 
+            padding: '16px', 
+            backgroundColor: '#FFFFFF', 
+            borderRadius: '12px', 
+            border: '2px solid #2563EB',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: '12px' }}>
+              <span style={{ fontSize: 18, fontWeight: 'bold', color: '#2563EB' }}>🔊 Volume Control</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: '8px' }}>
+              <span style={{ fontSize: 16, color: '#333', minWidth: 70, fontWeight: '600' }}>Volume:</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={volume}
+                onChange={handleVolumeChange}
+                style={{
+                  width: '250px',
+                  height: '12px',
+                  borderRadius: '6px',
+                  background: '#E0E0E0',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  WebkitAppearance: 'none',
+                  appearance: 'none',
+                }}
+              />
+              <span style={{ fontSize: 16, color: '#2563EB', minWidth: 50, fontWeight: 'bold' }}>{Math.round(volume * 100)}%</span>
+            </div>
+            <div style={{ textAlign: 'center', marginTop: '8px' }}>
+              <span style={{ fontSize: 14, color: '#666', fontStyle: 'italic' }}>Drag the slider to adjust volume</span>
+            </div>
+            <div style={{ textAlign: 'center', marginTop: '8px' }}>
+              <button 
+                onClick={() => console.log('Volume test button clicked, current volume:', volume)}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: 14,
+                  background: '#2563EB',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                Test Volume Slider
+              </button>
+            </div>
           </div>
           
           <div style={{ marginBottom: 16 }}>
