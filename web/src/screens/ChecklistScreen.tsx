@@ -43,7 +43,7 @@ const ChecklistScreen = () => {
   
   const { user } = useAuth();
   const { updateProgress } = useUserProgress();
-  const { quizState, setQuizState, saveQuizState, loadQuizState, clearQuizState, updateQuizProgress } = useContext(QuizContext);
+  const { quizState, setQuizState, saveQuizState, loadQuizState, clearQuizState } = useContext(QuizContext);
   const autoStopRef = useRef<number | null>(null);
   
   const userId = user?.uid || 'anonymous';
@@ -222,7 +222,6 @@ const ChecklistScreen = () => {
 
   const handleVolumeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newVolume = parseFloat(event.target.value);
-    console.log('Volume changed to:', newVolume);
     setVolume(newVolume);
     if (audio) {
       audio.volume = newVolume;

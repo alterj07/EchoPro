@@ -206,7 +206,7 @@ function DashboardScreen() {
   // Refresh dashboard when quiz state changes
   useEffect(() => {
     if (quizState) {
-      console.log('Web DashboardScreen: Quiz state changed, refreshing...', quizState);
+      console.log('Web DashboardScreen: Quiz state changed, refreshing...');
       loadHistory();
     }
   }, [quizState]);
@@ -214,7 +214,6 @@ function DashboardScreen() {
   const liveCorrect = quizState?.correctCount ?? 0;
   const liveIncorrect = quizState?.incorrectCount ?? 0;
   const liveSkipped = quizState?.skippedCount ?? 0;
-  console.log('Dashboard: Live values - correct:', liveCorrect, 'incorrect:', liveIncorrect, 'skipped:', liveSkipped);
   const liveTotal = liveCorrect + liveIncorrect + liveSkipped;
   const livePercent = liveTotal > 0 ? (liveCorrect / liveTotal) * 100 : 0;
   const livePerformanceColor = liveTotal > 0 ? (livePercent >= 80 ? '#4CAF50' : livePercent >= 60 ? '#FFC107' : '#F44336') : '#ccc';
