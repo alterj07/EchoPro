@@ -314,7 +314,7 @@ const ChecklistScreen = () => {
       await saveQuizState(user.uid);
     }
 
-    // Update progress immediately after each question
+    // Update progress immediately after each question (but don't mark as completed quiz)
     try {
       await updateProgress({
         quizId: updatedQuizState.quizId || `quiz_${Date.now()}`,
@@ -322,7 +322,8 @@ const ChecklistScreen = () => {
         correct: updatedDailyData.correct,
         incorrect: updatedDailyData.incorrect,
         skipped: updatedDailyData.skipped,
-        timeSpent: 0 // TODO: Calculate actual time spent
+        timeSpent: 0, // TODO: Calculate actual time spent
+        quizCompleted: false // This is just a question update, not a completed quiz
       });
     } catch (progressError) {
       console.error('Error updating progress:', progressError);
@@ -377,7 +378,7 @@ const ChecklistScreen = () => {
       await saveQuizState(user.uid);
     }
 
-    // Update progress immediately after each question
+    // Update progress immediately after each question (but don't mark as completed quiz)
     try {
       await updateProgress({
         quizId: updatedQuizState.quizId || `quiz_${Date.now()}`,
@@ -385,7 +386,8 @@ const ChecklistScreen = () => {
         correct: updatedDailyData.correct,
         incorrect: updatedDailyData.incorrect,
         skipped: updatedDailyData.skipped,
-        timeSpent: 0 // TODO: Calculate actual time spent
+        timeSpent: 0, // TODO: Calculate actual time spent
+        quizCompleted: false // This is just a question update, not a completed quiz
       });
     } catch (progressError) {
       console.error('Error updating progress:', progressError);
@@ -459,8 +461,11 @@ const ChecklistScreen = () => {
           percentage
         );
         
-        // Update progress context
-        await updateProgress(quizData);
+        // Update progress context - mark as completed quiz
+        await updateProgress({
+          ...quizData,
+          quizCompleted: true // This is a completed quiz
+        });
       }
     } catch (error) {
       console.error('Error saving quiz data:', error);

@@ -135,19 +135,91 @@ class ApiService {
       };
     }
     
-    // Update progress
-    progress.overallStats.totalQuizzesTaken += 1;
+    // Update progress - only increment quiz count if this is a completed quiz
+    if (quizData.quizCompleted) {
+      progress.overallStats.totalQuizzesTaken += 1;
+    }
     progress.overallStats.totalQuestionsAnswered += quizData.totalQuestions || 0;
     progress.overallStats.totalTimeSpent += quizData.timeSpent || 0;
     
-    // Update accuracy
-    if (progress.overallStats.totalQuestionsAnswered > 0) {
-      const correctAnswers = (progress.overallStats.overallAccuracy / 100) * (progress.overallStats.totalQuestionsAnswered - (quizData.totalQuestions || 0)) + (quizData.correct || 0);
-      progress.overallStats.overallAccuracy = (correctAnswers / progress.overallStats.totalQuestionsAnswered) * 100;
+    // Recalculate accuracy from actual history data to avoid accumulation errors
+    const historyKey = `quizHistory_${userId}`;
+    const historyJson = localStorage.getItem(historyKey);
+    if (historyJson) {
+      try {
+        const history = JSON.parse(historyJson);
+        let totalCorrect = 0;
+        let totalQuestions = 0;
+        
+        history.forEach((quiz: any) => {
+          totalCorrect += quiz.correct || 0;
+          totalQuestions += (quiz.correct || 0) + (quiz.incorrect || 0) + (quiz.skipped || 0);
+        });
+        
+        if (totalQuestions > 0) {
+          progress.overallStats.overallAccuracy = (totalCorrect / totalQuestions) * 100;
+        }
+      } catch (error) {
+        console.error('Error recalculating accuracy from history:', error);
+      }
     }
     
     localStorage.setItem(progressKey, JSON.stringify(progress));
     return progress;
+  }
+
+  // Debug function to reset and recalculate stats from history
+  async resetAndRecalculateStats(userId: string) {
+    const historyKey = `quizHistory_${userId}`;
+    const progressKey = `progress_${userId}_daily`;
+    
+    const historyJson = localStorage.getItem(historyKey);
+    if (!historyJson) {
+      console.log('No history found to recalculate from');
+      return;
+    }
+    
+    try {
+      const history = JSON.parse(historyJson);
+      let totalQuizzes = 0;
+      let totalCorrect = 0;
+      let totalIncorrect = 0;
+      let totalSkipped = 0;
+      let totalQuestions = 0;
+      
+      history.forEach((quiz: any) => {
+        totalQuizzes += 1;
+        totalCorrect += quiz.correct || 0;
+        totalIncorrect += quiz.incorrect || 0;
+        totalSkipped += quiz.skipped || 0;
+        totalQuestions += (quiz.correct || 0) + (quiz.incorrect || 0) + (quiz.skipped || 0);
+      });
+      
+      const overallAccuracy = totalQuestions > 0 ? (totalCorrect / totalQuestions) * 100 : 0;
+      
+      const correctedProgress = {
+        overallStats: {
+          totalQuizzesTaken: totalQuizzes,
+          totalQuestionsAnswered: totalQuestions,
+          totalCorrectAnswers: totalCorrect,
+          totalIncorrectAnswers: totalIncorrect,
+          totalSkippedAnswers: totalSkipped,
+          overallAccuracy: overallAccuracy,
+          averageQuizScore: totalQuizzes > 0 ? overallAccuracy : 0,
+          bestQuizScore: 100, // TODO: Calculate from history
+          totalTimeSpent: 0,
+          currentStreak: 0,
+          longestStreak: 0,
+          lastQuizDate: history.length > 0 ? history[history.length - 1].date : new Date().toISOString()
+        }
+      };
+      
+      localStorage.setItem(progressKey, JSON.stringify(correctedProgress));
+      console.log('Stats recalculated:', correctedProgress);
+      return correctedProgress;
+    } catch (error) {
+      console.error('Error recalculating stats:', error);
+    }
   }
 
   async getUserProgress(userId: string, period: string) {

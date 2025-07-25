@@ -45,6 +45,7 @@ function DashboardScreen() {
   const [period, setPeriod] = useState<Period>('week');
   const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [backendConnected, setBackendConnected] = useState(false);
   const { quizState } = useContext(QuizContext);
   const { userProgress, loading: progressLoading } = useUserProgress();
   const { user } = useAuth();
@@ -55,8 +56,11 @@ function DashboardScreen() {
       if (user?.uid) {
         // Try to get data from backend first
         try {
+          console.log('Attempting to load data from backend...');
           const dashboardData = await apiService.getDashboardData(user.uid, period);
           if (dashboardData && dashboardData.history) {
+            console.log('Successfully loaded data from backend:', dashboardData);
+            setBackendConnected(true);
             // Convert backend data format to our format
             const history: QuizResult[] = dashboardData.history.map((item: any) => ({
               date: item.date,
@@ -71,11 +75,14 @@ function DashboardScreen() {
           }
         } catch (backendError) {
           console.error('Failed to load from backend, falling back to localStorage:', backendError);
+          setBackendConnected(false);
         }
       }
       
       // Fallback to localStorage
-      const historyJson = localStorage.getItem('quizHistory');
+      console.log('Using localStorage fallback for dashboard data');
+      const historyKey = `quizHistory_${user?.uid || 'anonymous'}`;
+      const historyJson = localStorage.getItem(historyKey);
       const history: QuizResult[] = historyJson ? JSON.parse(historyJson) : [];
       const data = processQuizHistory(history, period);
       setPerformanceData(data);
@@ -253,6 +260,21 @@ function DashboardScreen() {
           }}>
             Your Music Progress
           </h1>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '14px',
+            color: '#666'
+          }}>
+            <div style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: backendConnected ? '#4CAF50' : '#F44336'
+            }}></div>
+            <span>{backendConnected ? 'Backend Connected' : 'Using Local Storage'}</span>
+          </div>
         </div>
         
         {quizState && (
