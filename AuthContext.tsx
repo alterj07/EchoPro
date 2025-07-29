@@ -1,26 +1,26 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Alert, Platform } from 'react-native';
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import firebase from '@react-native-firebase/app';
+// Remove Firebase imports since we're using MongoDB-based auth
+// import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+// import { GoogleSignin } from '@react-native-google-signin/google-signin';
+// import firebase from '@react-native-firebase/app';
 
-console.log('✅ Firebase app name:', firebase.apps[0]?.name);
-console.log('✅ Firebase apps count:', firebase.apps.length);
-console.log('✅ Firebase default app:', firebase.app()?.name);
+// console.log('✅ Firebase app name:', firebase.apps[0]?.name);
+// console.log('✅ Firebase apps count:', firebase.apps.length);
+// console.log('✅ Firebase default app:', firebase.app()?.name);
 
 interface AuthContextType {
-  user: FirebaseAuthTypes.User | null;
+  user: any | null; // Changed from FirebaseAuthTypes.User to any
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (name: string, email: string, password: string) => Promise<FirebaseAuthTypes.User>;
+  signUp: (name: string, email: string, password: string) => Promise<any>; // Changed return type
   signOut: () => Promise<void>;
   googleSignIn: () => Promise<void>;
   appleSignIn: () => Promise<void>;
 }
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -31,90 +31,207 @@ const API_BASE_URL = Platform.OS === 'android'
   ? 'http://10.0.2.2:3000/api'  // Android emulator
   : 'http://localhost:3000/api'; // iOS simulator
 
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<FirebaseAuthTypes.User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any | null>(null);
+  const [loading, setLoading] = useState(false); // Start with false since we're not using Firebase auth state
 
-  useEffect(() => {
-    // Listen for authentication state changes
-    const unsubscribe = auth().onAuthStateChanged((user) => {
-      setUser(user);
-      setLoading(false);
-    });
-
-    return unsubscribe;
-  }, []);
+  // Remove Firebase auth state listener since we're using MongoDB-based auth
+  // useEffect(() => {
+  //   const unsubscribe = auth().onAuthStateChanged((user) => {
+  //     setUser(user);
+  //     setLoading(false);
+  //   });
+  //   return unsubscribe;
+  // }, []);
 
   const signIn = async (email: string, password: string) => {
     try {
-      const response = await auth().signInWithEmailAndPassword(email, password);
-      console.log('User logged in:', response.user.uid);
-      // Create user in backend (if not exists)
-      await axios.post(`${API_BASE_URL}/users/create`, {
-        userId: response.user.uid,
-        name: response.user.displayName || response.user.email || 'Unknown',
+      // Validate credentials against MongoDB database only
+      const validationResponse = await axios.post(`${API_BASE_URL}/users/login`, {
+        email: email,
+        password: password
       });
-    } catch (error: any) {
-      console.error('Login error:', error);
       
-      // Special handling for dev account creation
-      if (email === 'dev@echopro.com' && error.code === 'auth/user-not-found') {
+      console.log('Login successful:', validationResponse.data);
+      
+      // Create a Firebase-compatible user object from the MongoDB user data
+      const mongoUser = validationResponse.data.user;
+      const firebaseUser = {
+        uid: mongoUser.userId,
+        email: mongoUser.email,
+        displayName: mongoUser.name,
+        emailVerified: true,
+        isAnonymous: false,
+        metadata: {},
+        multiFactor: null,
+        phoneNumber: null,
+        photoURL: null,
+        providerData: [],
+        refreshToken: '',
+        tenantId: null,
+        delete: async () => {},
+        getIdToken: async () => '',
+        getIdTokenResult: async () => ({ authTime: '', issuedAtTime: '', signInProvider: null, claims: {}, expirationTime: '', token: '' }),
+        reload: async () => {},
+        toJSON: () => ({}),
+        providerId: 'password'
+      } as any;
+      
+      // Clear any existing quiz state before setting the new user
+      if (user?.uid && user.uid !== firebaseUser.uid) {
         try {
-          console.log('Creating dev account...');
-          const devResponse = await auth().createUserWithEmailAndPassword(email, password);
-          await devResponse.user.updateProfile({
-            displayName: 'Development User',
-          });
-          console.log('Dev account created successfully');
-          
-          // Create user in backend
-          await axios.post(`${API_BASE_URL}/users/create`, {
-            userId: devResponse.user.uid,
-            name: 'Development User',
-          });
-          
-          Alert.alert('Dev Account Created', 'Development account created successfully! You can now use it for testing.');
-          return;
-        } catch (createError: any) {
-          console.error('Dev account creation failed:', createError);
-          Alert.alert('Dev Account Creation Failed', createError.message);
-          throw createError;
+          const key = `quizState_${user.uid}`;
+          await AsyncStorage.removeItem(key);
+          console.log('Cleared quiz state for previous user:', user.uid);
+        } catch (error) {
+          console.error('Error clearing previous user quiz state:', error);
         }
       }
       
-      Alert.alert('Login Failed', error.message);
+      // Also clear any existing quiz state for the new user to ensure fresh start
+      try {
+        const newUserKey = `quizState_${firebaseUser.uid}`;
+        await AsyncStorage.removeItem(newUserKey);
+        console.log('Cleared any existing quiz state for new user:', firebaseUser.uid);
+      } catch (error) {
+        console.error('Error clearing new user quiz state:', error);
+      }
+      
+      // Set the user in our auth context
+      setUser(firebaseUser);
+      
+    } catch (error: any) {
+      console.error('Login error:', error);
+      
+      // Handle specific error cases
+      if (error.response?.status === 404) {
+        Alert.alert('Account Not Found', 'No account found with this email address. Please sign up instead.');
+      } else if (error.response?.status === 401) {
+        if (error.response.data?.error === 'Invalid login method') {
+          Alert.alert('Invalid Login Method', 'This account was created with a different login method. Please use the original sign-in method.');
+        } else {
+          Alert.alert('Invalid Credentials', 'Invalid email or password. Please try again.');
+        }
+      } else {
+        Alert.alert('Login Failed', error.message || 'Login failed. Please try again.');
+      }
+      
       throw error;
     }
   };
 
   const signUp = async (name: string, email: string, password: string) => {
     try {
-      const response = await auth().createUserWithEmailAndPassword(email, password);
+      // Create user in MongoDB with password only
+      const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      // Update user profile with name
-      await response.user.updateProfile({
-        displayName: name,
-      });
-
-      console.log('User created:', response.user.uid);
-      // Create user in backend
-      await axios.post(`${API_BASE_URL}/users/create`, {
-        userId: response.user.uid,
-        name: name,
-      });
+      console.log('SignUp Debug - Parameters received:');
+      console.log('name:', name);
+      console.log('email:', email);
+      console.log('password:', password);
       
-      return response.user;
+      const requestBody = {
+        userId: userId,
+        name: name, // Use the actual name parameter
+        email: email,
+        password: password // Password will be encrypted on the backend
+      };
+      
+      console.log('SignUp Debug - Request body:', requestBody);
+      
+      const response = await axios.post(`${API_BASE_URL}/users/create`, requestBody);
+      
+      console.log('User created in MongoDB:', response.data);
+      
+      // Clear any existing progress data for the new user to ensure fresh start
+      try {
+        await axios.delete(`${API_BASE_URL}/users/${userId}/progress`);
+        console.log('Cleared progress data for new user:', userId);
+      } catch (error) {
+        console.error('Error clearing progress for new user:', error);
+      }
+      
+      // Create a Firebase-compatible user object from the MongoDB user data
+      const mongoUser = response.data;
+      const firebaseUser = {
+        uid: mongoUser.userId,
+        email: mongoUser.email,
+        displayName: mongoUser.name,
+        emailVerified: true,
+        isAnonymous: false,
+        metadata: {},
+        multiFactor: null,
+        phoneNumber: null,
+        photoURL: null,
+        providerData: [],
+        refreshToken: '',
+        tenantId: null,
+        delete: async () => {},
+        getIdToken: async () => '',
+        getIdTokenResult: async () => ({ authTime: '', issuedAtTime: '', signInProvider: null, claims: {}, expirationTime: '', token: '' }),
+        reload: async () => {},
+        toJSON: () => ({}),
+        providerId: 'password'
+      } as any;
+      
+      // Clear any existing quiz state before setting the new user
+      if (user?.uid && user.uid !== firebaseUser.uid) {
+        try {
+          const key = `quizState_${user.uid}`;
+          await AsyncStorage.removeItem(key);
+          console.log('Cleared quiz state for previous user:', user.uid);
+        } catch (error) {
+          console.error('Error clearing previous user quiz state:', error);
+        }
+      }
+      
+      // Also clear any existing quiz state for the new user to ensure fresh start
+      try {
+        const newUserKey = `quizState_${firebaseUser.uid}`;
+        await AsyncStorage.removeItem(newUserKey);
+        console.log('Cleared any existing quiz state for new user:', firebaseUser.uid);
+      } catch (error) {
+        console.error('Error clearing new user quiz state:', error);
+      }
+      
+      // Set the user in our auth context
+      setUser(firebaseUser);
+      
+      return firebaseUser;
     } catch (error: any) {
       console.error('Signup error:', error);
-      Alert.alert('Signup Failed', error.message);
+      
+      // Handle specific error cases
+      if (error.response?.status === 409) {
+        Alert.alert('Email Already Exists', 'An account with this email address already exists. Please sign in instead.');
+      } else if (error.response?.status === 400) {
+        Alert.alert('Invalid Input', 'Please check your input and try again.');
+      } else {
+        Alert.alert('Signup Failed', error.message || 'Signup failed. Please try again.');
+      }
+      
       throw error;
     }
   };
 
   const signOut = async () => {
     try {
-      await auth().signOut();
-      await GoogleSignin.signOut();
+      // Clear quiz state for the current user before signing out
+      if (user?.uid) {
+        try {
+          // Clear quiz state from AsyncStorage
+          const key = `quizState_${user.uid}`;
+          await AsyncStorage.removeItem(key);
+          console.log('Quiz state cleared for user:', user.uid);
+        } catch (error) {
+          console.error('Error clearing quiz state:', error);
+        }
+      }
+      
+      // Clear the user from our auth context (no Firebase needed)
+      setUser(null);
       console.log('User logged out successfully');
     } catch (error) {
       console.error('Logout error:', error);
@@ -124,103 +241,223 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const googleSignIn = async () => {
-    try {
-      console.log('Starting Google Sign-In process...');
+    // Temporarily disabled - using MongoDB-based authentication only
+    Alert.alert('Google Sign-In', 'Google Sign-In is currently disabled. Please use email/password authentication.');
+    throw new Error('Google Sign-In is currently disabled. Please use email/password authentication.');
+    
+    // try {
+    //   console.log('Starting Google Sign-In process...');
       
-      // Ensure Firebase is initialized
-      if (!firebase.apps.length) {
-        console.error('Firebase not initialized!');
-        throw new Error('Firebase not initialized. Please restart the app.');
-      }
+    //   // Ensure Firebase is initialized
+    //   // if (!firebase.apps.length) {
+    //   //   console.error('Firebase not initialized!');
+    //   //   throw new Error('Firebase not initialized. Please restart the app.');
+    //   // }
       
-      console.log('Firebase is initialized, proceeding with Google Sign-In...');
+    //   console.log('Firebase is initialized, proceeding with Google Sign-In...');
       
-      // Check if user is already signed in
-      try {
-        const currentUser = await GoogleSignin.getCurrentUser();
-        if (currentUser) {
-          await GoogleSignin.signOut();
-          console.log('Signed out from previous Google Sign-In session');
-        }
-      } catch (error) {
-        console.log('No previous sign-in session found');
-      }
+    //   // Check if user is already signed in
+    //   // try {
+    //   //   const currentUser = await GoogleSignin.getCurrentUser();
+    //   //   if (currentUser) {
+    //   //     await GoogleSignin.signOut();
+    //   //     console.log('Signed out from previous Google Sign-In session');
+    //   //   }
+    //   // } catch (error) {
+    //   //   console.log('No previous sign-in session found');
+    //   // }
       
-      // Get the users ID token
-      console.log('Calling GoogleSignin.signIn()...');
-      const userInfo = await GoogleSignin.signIn();
-      console.log('GoogleSignin.signIn() completed');
-      console.log('userInfo object:', JSON.stringify(userInfo, null, 2));
+    //   // Get the users ID token
+    //   console.log('Calling GoogleSignin.signIn()...');
+    //   // const userInfo = await GoogleSignin.signIn();
+    //   // console.log('GoogleSignin.signIn() completed');
+    //   // console.log('userInfo object:', JSON.stringify(userInfo, null, 2));
       
-      // Get the ID token using the proper method
-      const tokens = await GoogleSignin.getTokens();
-      console.log('Extracted tokens:', tokens.accessToken ? 'Access Token Present' : 'NULL', tokens.idToken ? 'ID Token Present' : 'NULL');
+    //   // Get the ID token using the proper method
+    //   // const tokens = await GoogleSignin.getTokens();
+    //   // console.log('Extracted tokens:', tokens.accessToken ? 'Access Token Present' : 'NULL', tokens.idToken ? 'ID Token Present' : 'NULL');
       
-      if (!tokens.idToken) {
-        console.error('idToken is null! userInfo structure:', Object.keys(userInfo));
-        throw new Error('Failed to get ID token from Google Sign-In. Please try again.');
-      }
+    //   // if (!tokens.idToken) {
+    //   //   console.error('idToken is null! userInfo structure:', Object.keys(userInfo));
+    //   //   throw new Error('Failed to get ID token from Google Sign-In. Please try again.');
+    //   // }
 
-      // Create a Google credential with the ID token and access token
-      console.log('Creating Google credential...');
-      console.log('ID Token length:', tokens.idToken ? tokens.idToken.length : 0);
-      console.log('Access Token length:', tokens.accessToken ? tokens.accessToken.length : 0);
+    //   // Create a Google credential with the ID token and access token
+    //   console.log('Creating Google credential...');
+    //   // console.log('ID Token length:', tokens.idToken ? tokens.idToken.length : 0);
+    //   // console.log('Access Token length:', tokens.accessToken ? tokens.accessToken.length : 0);
       
-      // Use both ID token and access token if available, otherwise just ID token
-      const googleCredential = tokens.accessToken 
-        ? auth.GoogleAuthProvider.credential(tokens.idToken, tokens.accessToken)
-        : auth.GoogleAuthProvider.credential(tokens.idToken);
+    //   // Use both ID token and access token if available, otherwise just ID token
+    //   // const googleCredential = tokens.accessToken 
+    //   //   ? auth.GoogleAuthProvider.credential(tokens.idToken, tokens.accessToken)
+    //   //   : auth.GoogleAuthProvider.credential(tokens.idToken);
       
-      console.log('Google credential created successfully');
+    //   // console.log('Google credential created successfully');
       
-      // Sign-in the user with the credential
-      console.log('Signing in with Firebase...');
-      const response = await auth().signInWithCredential(googleCredential);
-      console.log('Firebase sign-in successful:', response.user.uid);
+    //   // Sign-in the user with the credential
+    //   console.log('Signing in with Firebase...');
+    //   // const response = await auth().signInWithCredential(googleCredential);
+    //   // console.log('Firebase sign-in successful:', response.user.uid);
       
-      // Create user in backend
-      try {
-        console.log('Creating user in backend...');
-        console.log('API_BASE_URL:', API_BASE_URL);
-        const backendResponse = await axios.post(`${API_BASE_URL}/users/create`, {
-          userId: response.user.uid,
-          name: response.user.displayName || response.user.email || 'Unknown',
-        });
-        console.log('User created in backend successfully:', backendResponse.data);
-      } catch (backendError: any) {
-        console.error('Backend user creation failed:', backendError);
-        console.error('Backend error details:', backendError.response?.data || backendError.message);
-        // Don't throw here - the user is still signed in to Firebase
-      }
-    } catch (error: any) {
-      console.error('Google sign-in error:', error);
-      console.error('Error details:', error.message);
-      console.error('Error code:', error.code);
-      console.error('Full error object:', JSON.stringify(error, null, 2));
+    //   // Validate that the user exists in our backend with the correct Firebase UID
+    //   // try {
+    //   //   const validationResponse = await axios.post(`${API_BASE_URL}/users/login`, {
+    //   //     email: response.user.email,
+    //   //     firebaseUid: response.user.uid
+    //   //   });
+    //   //   console.log('User validated in backend:', validationResponse.data);
+    //   // } catch (validationError: any) {
+    //   //   console.error('Login validation failed:', validationError);
       
-      let errorMessage = 'Google Sign-In failed. Please try again.';
-      if (error.code === 'auth/invalid-credential') {
-        errorMessage = 'Authentication failed. Please try signing in again.';
-      } else if (error.code === 'auth/network-request-failed') {
-        errorMessage = 'Network error. Please check your connection and try again.';
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
+    //   //   if (validationError.response?.status === 404) {
+    //   //     // User doesn't exist in our backend, sign them out from Firebase
+    //   //     // await auth().signOut();
+    //   //     Alert.alert('Account Not Found', 'No account found with this email address. Please sign up instead.');
+    //   //     throw new Error('No account found with this email address. Please sign up instead.');
+    //   //   }
       
-      Alert.alert('Google Sign-In Failed', errorMessage);
-      throw error;
-    }
+    //   //   if (validationError.response?.status === 401) {
+    //   //     // Invalid credentials (Firebase UID mismatch)
+    //   //     // await auth().signOut();
+    //   //     Alert.alert('Authentication Failed', 'Invalid credentials. Please check your email and password.');
+    //   //     throw new Error('Invalid credentials. Please check your email and password.');
+    //   //   }
+      
+    //   //   // For other backend errors, still allow login but log the error
+    //   //   console.error('Backend validation failed, but proceeding with login');
+    //   // }
+      
+    //   // Check if user exists in backend and create if needed
+    //   // try {
+    //   //   const backendResponse = await axios.get(`${API_BASE_URL}/users/${response.user.uid}`);
+    //   //   console.log('User exists in backend:', backendResponse.data);
+    //   // } catch (backendError: any) {
+    //   //   console.error('User not found in backend:', backendError);
+      
+    //   //   // If user doesn't exist in backend, create them
+    //   //   if (backendError.response?.status === 404) {
+    //   //     try {
+    //   //       console.log('Creating user in backend...');
+    //   //       await axios.post(`${API_BASE_URL}/users/create`, {
+    //   //         userId: response.user.uid,
+    //   //         name: response.user.displayName || response.user.email || 'Unknown',
+    //   //         email: response.user.email,
+    //   //       });
+    //   //       console.log('User created in backend successfully');
+    //   //     } catch (createError: any) {
+    //   //       console.error('Failed to create user in backend:', createError);
+    //   //       // Don't fail the login, but log the error
+    //   //     }
+    //   //   }
+    //   // }
+    // } catch (error: any) {
+    //   console.error('Google sign-in error:', error);
+    //   Alert.alert('Google Sign-In Failed', error.message || 'Google sign-in failed. Please try again.');
+    //   throw error;
+    // }
   };
 
   const appleSignIn = async () => {
-    try {
-      console.log('Apple Sign-In not implemented yet');
-      Alert.alert('Coming Soon', 'Apple Sign-In will be available in a future update.');
-    } catch (error: any) {
-      console.error('Apple sign-in error:', error);
-      Alert.alert('Apple Sign-In Failed', 'Apple Sign-In is not available yet.');
-      throw error;
-    }
+    // Temporarily disabled - using MongoDB-based authentication only
+    Alert.alert('Apple Sign-In', 'Apple Sign-In is currently disabled. Please use email/password authentication.');
+    throw new Error('Apple Sign-In is currently disabled. Please use email/password authentication.');
+    
+    // try {
+    //   console.log('Starting Apple Sign-In process...');
+      
+    //   // Ensure Firebase is initialized
+    //   if (!firebase.apps.length) {
+    //     console.error('Firebase not initialized!');
+    //     throw new Error('Firebase not initialized. Please restart the app.');
+    //   }
+      
+    //   console.log('Firebase is initialized, proceeding with Apple Sign-In...');
+      
+    //   // Get the users ID token
+    //   console.log('Calling AppleSignin.signInAsync()...');
+    //   const userInfo = await AppleSignin.signInAsync({
+    //     requestedScopes: [AppleSignin.Scope.EMAIL, AppleSignin.Scope.FULL_NAME],
+    //   });
+    //   console.log('AppleSignin.signInAsync() completed');
+    //   console.log('userInfo object:', JSON.stringify(userInfo, null, 2));
+      
+    //   if (!userInfo.identityToken) {
+    //     console.error('identityToken is null! userInfo structure:', Object.keys(userInfo));
+    //     throw new Error('Failed to get identity token from Apple Sign-In. Please try again.');
+    //   }
+
+    //   // Create an Apple credential with the identity token
+    //   console.log('Creating Apple credential...');
+    //   console.log('Identity Token length:', userInfo.identityToken ? userInfo.identityToken.length : 0);
+      
+    //   const appleCredential = auth.AppleAuthProvider.credential(
+    //     userInfo.identityToken,
+    //     userInfo.nonce
+    //   );
+      
+    //   console.log('Apple credential created successfully');
+      
+    //   // Sign-in the user with the credential
+    //   console.log('Signing in with Firebase...');
+    //   const response = await auth().signInWithCredential(appleCredential);
+    //   console.log('Firebase sign-in successful:', response.user.uid);
+      
+    //   // Validate that the user exists in our backend with the correct Firebase UID
+    //   try {
+    //     const validationResponse = await axios.post(`${API_BASE_URL}/users/login`, {
+    //       email: response.user.email,
+    //       firebaseUid: response.user.uid
+    //     });
+    //     console.log('User validated in backend:', validationResponse.data);
+    //   } catch (validationError: any) {
+    //     console.error('Login validation failed:', validationError);
+        
+    //     if (validationError.response?.status === 404) {
+    //       // User doesn't exist in our backend, sign them out from Firebase
+    //       await auth().signOut();
+    //       Alert.alert('Account Not Found', 'No account found with this email address. Please sign up instead.');
+    //       throw new Error('No account found with this email address. Please sign up instead.');
+    //     }
+        
+    //     if (validationError.response?.status === 401) {
+    //       // Invalid credentials (Firebase UID mismatch)
+    //       await auth().signOut();
+    //       Alert.alert('Authentication Failed', 'Invalid credentials. Please check your email and password.');
+    //       throw new Error('Invalid credentials. Please check your email and password.');
+    //     }
+        
+    //     // For other backend errors, still allow login but log the error
+    //     console.error('Backend validation failed, but proceeding with login');
+    //   }
+      
+    //   // Check if user exists in backend and create if needed
+    //   try {
+    //     const backendResponse = await axios.get(`${API_BASE_URL}/users/${response.user.uid}`);
+    //     console.log('User exists in backend:', backendResponse.data);
+    //   } catch (backendError: any) {
+    //     console.error('User not found in backend:', backendError);
+        
+    //     // If user doesn't exist in backend, create them
+    //     if (backendError.response?.status === 404) {
+    //       try {
+    //         console.log('Creating user in backend...');
+    //         await axios.post(`${API_BASE_URL}/users/create`, {
+    //           userId: response.user.uid,
+    //           name: response.user.displayName || response.user.email || 'Unknown',
+    //           email: response.user.email,
+    //         });
+    //         console.log('User created in backend successfully');
+    //       } catch (createError: any) {
+    //         console.error('Failed to create user in backend:', createError);
+    //         // Don't fail the login, but log the error
+    //       }
+    //     }
+    //   }
+    // } catch (error: any) {
+    //   console.error('Apple sign-in error:', error);
+    //   Alert.alert('Apple Sign-In Failed', error.message || 'Apple sign-in failed. Please try again.');
+    //   throw error;
+    // }
   };
 
   const value: AuthContextType = {

@@ -12,6 +12,17 @@ router.post('/submit', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    // Check if user exists in database
+    const user = await User.findOne({ userId });
+    if (!user) {
+      // Return success but don't save data if user doesn't exist yet
+      return res.status(200).json({
+        success: true,
+        message: 'User not found - results not saved',
+        result: null
+      });
+    }
+
     const result = new ChecklistResult({
       userId,
       answers,
@@ -38,6 +49,21 @@ router.get('/dashboard/:userId/:period', async (req, res) => {
   try {
     const { userId, period } = req.params;
     const { year, month, week, day } = req.query;
+
+    // Check if user exists in database
+    const user = await User.findOne({ userId });
+    if (!user) {
+      // Return empty data if user doesn't exist yet
+      return res.json({
+        period,
+        percent: 0,
+        history: [],
+        totalQuizzes: 0,
+        totalCorrect: 0,
+        totalIncorrect: 0,
+        totalSkipped: 0
+      });
+    }
 
     let startDate, endDate;
     const now = new Date();

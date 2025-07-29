@@ -1,7 +1,8 @@
-import { createContext, useState } from 'react';
+import { createContext, useState, useCallback, useContext } from 'react';
 import type { ReactNode } from 'react';
+import apiService from '../services/apiService';
 
-interface ITunesTrack {
+export interface ITunesTrack {
   trackId: number;
   trackName: string;
   artistName: string;
@@ -31,72 +32,48 @@ export interface QuizState {
 interface QuizContextType {
   quizState: QuizState | null;
   setQuizState: React.Dispatch<React.SetStateAction<QuizState | null>>;
-  saveQuizState: (userId: string) => Promise<void>;
-  loadQuizState: (userId: string) => Promise<QuizState | null>;
-  clearQuizState: (userId: string) => Promise<void>;
   updateQuizProgress: (questionIndex: number, answer: string, isCorrect: boolean) => void;
+  getTodayLiveProgress: (userId: string) => Promise<{correct: number, incorrect: number, skipped: number, total: number, percent: number}>;
 }
 
-export const QuizContext = createContext<QuizContextType>({
+const QuizContext = createContext<QuizContextType>({
   quizState: null,
   setQuizState: () => {},
-  saveQuizState: async () => {},
-  loadQuizState: async () => null,
-  clearQuizState: async () => {},
   updateQuizProgress: () => {},
+  getTodayLiveProgress: async () => ({correct: 0, incorrect: 0, skipped: 0, total: 0, percent: 0}),
 });
 
-interface QuizProviderProps {
-  children: ReactNode;
-}
-
-export const QuizProvider: React.FC<QuizProviderProps> = ({ children }) => {
+export const QuizProvider = ({ children }: { children: ReactNode }) => {
   const [quizState, setQuizState] = useState<QuizState | null>(null);
 
-  const saveQuizState = async (userId: string) => {
-    if (!quizState) return;
-    
+  // NEW: Get today's live progress from backend
+  const getTodayLiveProgress = useCallback(async (userId: string) => {
     try {
-      const key = `quizState_${userId}`;
-      localStorage.setItem(key, JSON.stringify(quizState));
-    } catch (error) {
-      console.error('Error saving quiz state:', error);
-    }
-  };
-
-  const loadQuizState = async (userId: string): Promise<QuizState | null> => {
-    try {
-      const key = `quizState_${userId}`;
-      const savedState = localStorage.getItem(key);
-      
-      if (savedState) {
-        const parsedState = JSON.parse(savedState);
-        // Check if the saved state is from today
-        const today = new Date().toISOString().split('T')[0];
-        const savedDate = new Date(parsedState.startTime || Date.now()).toISOString().split('T')[0];
-        
-        if (savedDate === today) {
-          return parsedState;
-        } else {
-          // Clear old state if it's from a different day
-          await clearQuizState(userId);
+      const userData = await apiService.getUser(userId);
+      if (userData && userData.progress && userData.progress.length > 0) {
+        // Find today's progress (progress[0] should be daily)
+        const todayProgress = userData.progress.find((p: any) => p.period === 'daily');
+        if (todayProgress && todayProgress.stats) {
+          const { correctAnswers, incorrectAnswers, skippedAnswers, totalQuestions } = todayProgress.stats;
+          const total = correctAnswers + incorrectAnswers + skippedAnswers;
+          const percent = total > 0 ? (correctAnswers / total) * 100 : 0;
+          
+          return {
+            correct: correctAnswers || 0,
+            incorrect: incorrectAnswers || 0,
+            skipped: skippedAnswers || 0,
+            total: total,
+            percent: percent
+          };
         }
       }
-      return null;
+      // Return default values if no progress found
+      return { correct: 0, incorrect: 0, skipped: 0, total: 0, percent: 0 };
     } catch (error) {
-      console.error('Error loading quiz state:', error);
-      return null;
+      console.error('Error getting today live progress:', error);
+      return { correct: 0, incorrect: 0, skipped: 0, total: 0, percent: 0 };
     }
-  };
-
-  const clearQuizState = async (userId: string) => {
-    try {
-      const key = `quizState_${userId}`;
-      localStorage.removeItem(key);
-    } catch (error) {
-      console.error('Error clearing quiz state:', error);
-    }
-  };
+  }, []);
 
   const updateQuizProgress = (questionIndex: number, answer: string, isCorrect: boolean) => {
     if (!quizState) return;
@@ -123,15 +100,21 @@ export const QuizProvider: React.FC<QuizProviderProps> = ({ children }) => {
   };
 
   return (
-    <QuizContext.Provider value={{ 
-      quizState, 
-      setQuizState, 
-      saveQuizState, 
-      loadQuizState, 
-      clearQuizState,
-      updateQuizProgress 
+    <QuizContext.Provider value={{
+      quizState,
+      setQuizState,
+      updateQuizProgress,
+      getTodayLiveProgress
     }}>
       {children}
     </QuizContext.Provider>
   );
+};
+
+export const useQuiz = () => {
+  const context = useContext(QuizContext);
+  if (context === undefined) {
+    throw new Error('useQuiz must be used within a QuizProvider');
+  }
+  return context;
 }; 

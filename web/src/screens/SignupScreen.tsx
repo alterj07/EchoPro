@@ -85,10 +85,14 @@ const SignupScreen: React.FC = () => {
     }
     setLoading(true);
     try {
-      await signUp(email, password);
+      await signUp(name, email, password);
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Signup failed');
+      if (err.message.includes('email address already exists')) {
+        setError('An account with this email address already exists. Please sign in instead.');
+      } else {
+        setError(err.message || 'Signup failed');
+      }
     } finally {
       setLoading(false);
     }

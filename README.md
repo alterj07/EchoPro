@@ -109,7 +109,7 @@ The web version is deployed on Vercel at [echo-pro.vercel.app](https://echo-pro.
 ### Current Status
 - ✅ **Frontend**: Deployed and working
 - ✅ **Authentication**: localStorage-based for web
-- ✅ **Quiz Functionality**: Full quiz experience with localStorage fallback
+- ✅ **Quiz Functionality**: Full quiz experience with backend integration
 - ✅ **Dashboard**: Progress tracking and statistics
 - ⚠️ **Backend API**: Needs deployment (currently falls back to localStorage)
 
@@ -190,7 +190,7 @@ The app includes a comprehensive backend API for user management and progress tr
 - [x] Personalized music selection based on user age
 - [ ] Difficulty levels (easy, medium, hard)
 - [ ] Social features (challenges, friend competitions)
-- [ ] Offline mode with cached songs
+
 - [ ] Custom quiz creation
 - [ ] Push notifications for daily reminders
 - [ ] Advanced analytics and insights

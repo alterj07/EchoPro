@@ -442,19 +442,19 @@ const ChecklistScreen = () => {
       await saveQuizState(user.uid);
     }
 
-    // Update progress immediately after each question
-    try {
-      await updateProgress({
-        quizId: updatedQuizState.quizId || `quiz_${Date.now()}`,
-        totalQuestions: updatedDailyData.questionsAnswered,
-        correct: updatedDailyData.correct,
-        incorrect: updatedDailyData.incorrect,
-        skipped: updatedDailyData.skipped,
-        timeSpent: 0 // TODO: Calculate actual time spent
-      });
-    } catch (progressError) {
-      console.error('Error updating progress:', progressError);
-    }
+    // Don't update backend progress after each question - only when quiz is completed
+    // try {
+    //   await updateProgress({
+    //     quizId: updatedQuizState.quizId || `quiz_${Date.now()}`,
+    //     totalQuestions: updatedDailyData.questionsAnswered,
+    //     correct: updatedDailyData.correct,
+    //     incorrect: updatedDailyData.incorrect,
+    //     skipped: updatedDailyData.skipped,
+    //     timeSpent: 0 // TODO: Calculate actual time spent
+    //   });
+    // } catch (progressError) {
+    //   console.error('Error updating progress:', progressError);
+    // }
 
     // Save to quiz history
     await saveQuizHistory(updatedDailyData);
@@ -466,13 +466,31 @@ const ChecklistScreen = () => {
         setCurrentQuestionIndex(nextIndex);
         setCurrentQuestion(updatedQuestions[nextIndex]);
       } else {
-        // Clear quiz state when quiz is completed
-        if (user?.uid) {
-          clearQuizState(user.uid);
-        }
+        // Quiz is completed - update backend progress
+        handleQuizCompletion(updatedDailyData);
+        // Don't clear quiz state immediately - let it persist for the day
+        // The quiz state will be cleared automatically when the day changes
         setScreen('results');
       }
     }, 2500); // Slightly longer than feedback display
+  };
+
+  const handleQuizCompletion = async (dailyData: DailyQuizData) => {
+    try {
+      if (user) {
+        await updateProgress({
+          quizId: `quiz_${Date.now()}`,
+          totalQuestions: dailyData.questionsAnswered,
+          correct: dailyData.correct,
+          incorrect: dailyData.incorrect,
+          skipped: dailyData.skipped,
+          timeSpent: 0, // TODO: Calculate actual time spent
+          quizCompleted: true // This is a completed quiz
+        });
+      }
+    } catch (progressError) {
+      console.error('Error updating progress on quiz completion:', progressError);
+    }
   };
 
   const saveQuizHistory = async (dailyData: DailyQuizData) => {
@@ -504,22 +522,22 @@ const ChecklistScreen = () => {
       
       await AsyncStorage.setItem(QUIZ_HISTORY_KEY, JSON.stringify(history));
       
-      // Save to backend progress service
-      try {
-        if (user) {
-          await updateProgress({
-            quizId: `quiz_${Date.now()}`,
-            totalQuestions: dailyData.questionsAnswered,
-            correct: dailyData.correct,
-            incorrect: dailyData.incorrect,
-            skipped: dailyData.skipped,
-            timeSpent: 0 // TODO: Calculate actual time spent
-          });
-        }
-      } catch (progressError) {
-        console.error('Error saving to progress service:', progressError);
-        // Don't fail the quiz if progress saving fails
-      }
+      // Don't update backend progress here - only when quiz is actually completed
+      // try {
+      //   if (user) {
+      //     await updateProgress({
+      //       quizId: `quiz_${Date.now()}`,
+      //       totalQuestions: dailyData.questionsAnswered,
+      //       correct: dailyData.correct,
+      //       incorrect: dailyData.incorrect,
+      //       skipped: dailyData.skipped,
+      //       timeSpent: 0 // TODO: Calculate actual time spent
+      //     });
+      //   }
+      // } catch (progressError) {
+      //   console.error('Error saving to progress service:', progressError);
+      //   // Don't fail the quiz if progress saving fails
+      // }
     } catch (error) {
       console.error('Error saving quiz history:', error);
     }

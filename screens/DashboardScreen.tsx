@@ -1,5 +1,5 @@
 import TrackPlayer from 'react-native-track-player';
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { StatusBar, useColorScheme, View, Text, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet, Dimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -63,7 +63,7 @@ function DashboardScreen() {
   const [period, setPeriod] = useState<Period>('week');
   const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
-  const { quizState } = useContext(QuizContext);
+  const { quizState, setQuizState, loadQuizState } = useContext(QuizContext);
   const { user } = useAuth();
   const { userProgress, loading: progressLoading } = useUserProgress();
   const navigation = useNavigation<StackNavigationProp<DashboardStackParamList, 'Dashboard'>>();
@@ -75,7 +75,28 @@ function DashboardScreen() {
   const userId = user?.uid || 'anonymous';
   const QUIZ_HISTORY_KEY = `quizHistory_${userId}`;
 
-  const loadHistory = async () => {
+  // Load quiz state when user logs in - memoized to prevent re-renders
+  const loadSavedQuizState = useCallback(async () => {
+    if (user?.uid) {
+      try {
+        const savedState = await loadQuizState(user.uid);
+        if (savedState) {
+          setQuizState(savedState);
+        }
+      } catch (error) {
+        console.error('Error loading quiz state in dashboard:', error);
+      }
+    }
+  }, [user?.uid, loadQuizState, setQuizState]);
+
+  // Only run once when user changes
+  useEffect(() => {
+    console.log('DashboardScreen: loadSavedQuizState effect triggered');
+    loadSavedQuizState();
+  }, [user?.uid]); // Only depend on user.uid, not the function
+
+  const loadHistory = useCallback(async () => {
+    console.log('DashboardScreen: loadHistory called');
     setLoading(true);
     try {
       const historyJson = await AsyncStorage.getItem(QUIZ_HISTORY_KEY);
@@ -87,7 +108,17 @@ function DashboardScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [QUIZ_HISTORY_KEY, period]);
+
+  useEffect(() => {
+    console.log('DashboardScreen: isFocused =', isFocused);
+    if (isFocused) {
+      loadHistory();
+    }
+  }, [isFocused, period]); // Only depend on isFocused and period, not the function
+
+  // Remove the quizState effect that was causing re-renders
+  // The quiz state is already handled by the live progress display
 
   const processQuizHistory = (history: QuizResult[], selectedPeriod: Period): PerformanceData => {
     let filteredHistory = history;
@@ -120,7 +151,8 @@ function DashboardScreen() {
 
       const dailyData: { [key: string]: { correct: number, incorrect: number, skipped: number, total: number, date: string} } = {};
 
-      for (let i = 0; i < new Date().getDay(); i++) {
+      // Fix: Use a fixed number of days (7) instead of new Date().getDay()
+      for (let i = 0; i < 7; i++) {
           const day = new Date(lastSunday);
           day.setDate(lastSunday.getDate() + i);
           const dayString = getDayOfWeek(day);
@@ -226,21 +258,6 @@ function DashboardScreen() {
       </View>
     );
   };
-
-  useEffect(() => {
-    console.log('DashboardScreen: isFocused =', isFocused);
-    if (isFocused) {
-      loadHistory();
-    }
-  }, [isFocused, period, userId]); // Reload when user changes
-
-  // Refresh dashboard when quiz state changes
-  useEffect(() => {
-    if (isFocused && quizState) {
-      console.log('DashboardScreen: Quiz state changed, refreshing...');
-      loadHistory();
-    }
-  }, [quizState, isFocused]);
 
   const liveCorrect = quizState?.correctCount ?? 0;
   const liveIncorrect = quizState?.incorrectCount ?? 0;

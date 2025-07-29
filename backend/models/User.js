@@ -61,6 +61,31 @@ const progressSchema = new mongoose.Schema({
       default: 0
     }
   },
+  // Active quiz state for resuming quizzes
+  quizQuestions: {
+    type: [{
+      id: String,
+      track: {
+        trackId: Number,
+        trackName: String,
+        artistName: String,
+        previewUrl: String
+      },
+      options: [String],
+      correctAnswer: String,
+      userAnswer: String,
+      status: {
+        type: String,
+        enum: ['unanswered', 'correct', 'incorrect', 'skipped'],
+        default: 'unanswered'
+      }
+    }],
+    default: []
+  },
+  currentQuestionIndex: {
+    type: Number,
+    default: 0
+  },
   history: [{
     date: {
       type: Date,
@@ -119,7 +144,13 @@ const userSchema = new mongoose.Schema({
   },
   email: {
     type: String,
-    required: false
+    required: false,
+    unique: true,
+    sparse: true // Allows multiple null values but enforces uniqueness for non-null values
+  },
+  password: {
+    type: String,
+    required: false // Optional for users created via Google/Apple sign-in
   },
   preferences: {
     fontSize: {

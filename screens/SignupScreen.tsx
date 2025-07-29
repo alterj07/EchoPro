@@ -114,7 +114,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
 
     setLoading(true);
     try {
-      // Create user with Firebase Auth
+      // Create user with MongoDB authentication
       const newUser = await signUp(name.trim(), email.trim(), password);
       
       // Set up initial user preferences in progress service
@@ -160,12 +160,10 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
       console.error('Signup error:', error);
       let errorMessage = 'Signup failed. Please try again.';
       
-      if (error.code === 'auth/email-already-in-use') {
+      if (error.response?.status === 409) {
         errorMessage = 'An account with this email already exists. Please sign in instead.';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Please enter a valid email address.';
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'Password is too weak. Please choose a stronger password.';
+      } else if (error.response?.status === 400) {
+        errorMessage = 'Please check your input and try again.';
       } else if (error.message) {
         errorMessage = error.message;
       }

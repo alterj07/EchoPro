@@ -1,8 +1,8 @@
-import { useState, useContext, useEffect } from 'react';
-import { useUserProgress } from '../contexts/UserProgressContext';
-import { QuizContext } from '../contexts/QuizContext';
-import apiService from '../services/apiService';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useUserProgress } from '../contexts/UserProgressContext';
+import { useQuiz } from '../contexts/QuizContext';
+import apiService from '../services/apiService';
 
 type Period = 'day' | 'week' | 'month' | 'year' | 'all';
 
@@ -21,15 +21,15 @@ type ProcessedHistoryItem = QuizResult & {
 };
 
 type DailySummaryItem = {
-    day: string;
-    date: string;
-    correct: number;
-    incorrect: number;
-    skipped: number;
-    total: number;
-    percent: number;
-    color: string;
-    isActive: boolean;
+  day: string;
+  date: string;
+  correct: number;
+  incorrect: number;
+  skipped: number;
+  total: number;
+  percent: number;
+  color: string;
+  isActive: boolean;
 }
 
 type PerformanceData = {
@@ -45,53 +45,80 @@ function DashboardScreen() {
   const [period, setPeriod] = useState<Period>('week');
   const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [backendConnected, setBackendConnected] = useState(false);
-  const { quizState } = useContext(QuizContext);
+  const { getTodayLiveProgress } = useQuiz();
   const { userProgress, loading: progressLoading } = useUserProgress();
   const { user } = useAuth();
 
-  const loadHistory = async () => {
+  // State for today's live progress from backend
+  const [todayLiveProgress, setTodayLiveProgress] = useState({
+    correct: 0,
+    incorrect: 0,
+    skipped: 0,
+    total: 0,
+    percent: 0
+  });
+
+  // Load today's live progress from backend
+  const loadTodayLiveProgress = useCallback(async () => {
+    if (user?.uid) {
+      try {
+        const progress = await getTodayLiveProgress(user.uid);
+        setTodayLiveProgress(progress);
+      } catch (error) {
+        console.error('Error loading today live progress:', error);
+      }
+    }
+  }, [user?.uid, getTodayLiveProgress]);
+
+  // Load today's live progress when user changes
+  useEffect(() => {
+    loadTodayLiveProgress();
+  }, [loadTodayLiveProgress]);
+
+  const loadHistory = useCallback(async () => {
     setLoading(true);
     try {
       if (user?.uid) {
-        // Try to get data from backend first
-        try {
-          console.log('Attempting to load data from backend...');
-          const dashboardData = await apiService.getDashboardData(user.uid, period);
-          if (dashboardData && dashboardData.history) {
-            console.log('Successfully loaded data from backend:', dashboardData);
-            setBackendConnected(true);
-            // Convert backend data format to our format
-            const history: QuizResult[] = dashboardData.history.map((item: any) => ({
-              date: item.date,
-              correct: item.correct || 0,
-              incorrect: item.incorrect || 0,
-              skipped: item.skipped || 0,
-              total: (item.correct || 0) + (item.incorrect || 0) + (item.skipped || 0)
-            }));
-            const data = processQuizHistory(history, period);
-            setPerformanceData(data);
-            return;
-          }
-        } catch (backendError) {
-          console.error('Failed to load from backend, falling back to localStorage:', backendError);
-          setBackendConnected(false);
+        const dashboardData = await apiService.getDashboardData(user.uid, period);
+        if (dashboardData && dashboardData.history) {
+          // Convert backend data format to our format
+          const history: QuizResult[] = dashboardData.history.map((item: any) => ({
+            date: item.date,
+            correct: item.correct || 0,
+            incorrect: item.incorrect || 0,
+            skipped: item.skipped || 0,
+            total: (item.correct || 0) + (item.incorrect || 0) + (item.skipped || 0)
+          }));
+          const data = processQuizHistory(history, period);
+          setPerformanceData(data);
         }
       }
-      
-      // Fallback to localStorage
-      console.log('Using localStorage fallback for dashboard data');
-      const historyKey = `quizHistory_${user?.uid || 'anonymous'}`;
-      const historyJson = localStorage.getItem(historyKey);
-      const history: QuizResult[] = historyJson ? JSON.parse(historyJson) : [];
-      const data = processQuizHistory(history, period);
-      setPerformanceData(data);
     } catch (e) {
       console.error('Failed to load quiz history.', e);
+      setPerformanceData({
+        totalQuizzes: 0,
+        totalCorrect: 0,
+        totalIncorrect: 0,
+        totalSkipped: 0,
+        overallPercent: 0,
+        history: []
+      });
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.uid, period]);
+
+  useEffect(() => {
+    loadHistory();
+  }, [period]); // Only depend on period, not the function
+
+  // Calculate live progress values from backend data
+  const liveCorrect = todayLiveProgress.correct;
+  const liveIncorrect = todayLiveProgress.incorrect;
+  const liveSkipped = todayLiveProgress.skipped;
+  const liveTotal = todayLiveProgress.total;
+  const livePercent = todayLiveProgress.percent;
+  const livePerformanceColor = liveTotal > 0 ? (livePercent >= 80 ? '#4CAF50' : livePercent >= 60 ? '#FFC107' : '#F44336') : '#ccc';
 
   const processQuizHistory = (history: QuizResult[], selectedPeriod: Period): PerformanceData => {
     let filteredHistory = history;
@@ -206,25 +233,6 @@ function DashboardScreen() {
     );
   };
 
-  useEffect(() => {
-    loadHistory();
-  }, [period, user?.uid]);
-
-  // Refresh dashboard when quiz state changes
-  useEffect(() => {
-    if (quizState) {
-      console.log('Web DashboardScreen: Quiz state changed, refreshing...');
-      loadHistory();
-    }
-  }, [quizState]);
-
-  const liveCorrect = quizState?.correctCount ?? 0;
-  const liveIncorrect = quizState?.incorrectCount ?? 0;
-  const liveSkipped = quizState?.skippedCount ?? 0;
-  const liveTotal = liveCorrect + liveIncorrect + liveSkipped;
-  const livePercent = liveTotal > 0 ? (liveCorrect / liveTotal) * 100 : 0;
-  const livePerformanceColor = liveTotal > 0 ? (livePercent >= 80 ? '#4CAF50' : livePercent >= 60 ? '#FFC107' : '#F44336') : '#ccc';
-
   if (loading || progressLoading) {
     return (
       <div style={{
@@ -260,24 +268,10 @@ function DashboardScreen() {
           }}>
             Your Music Progress
           </h1>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            fontSize: '14px',
-            color: '#666'
-          }}>
-            <div style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: backendConnected ? '#4CAF50' : '#F44336'
-            }}></div>
-            <span>{backendConnected ? 'Backend Connected' : 'Using Local Storage'}</span>
-          </div>
+          
         </div>
         
-        {quizState && (
+        {todayLiveProgress && (
           <div style={{
             backgroundColor: '#FFFFFF',
             padding: '24px',

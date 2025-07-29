@@ -87,25 +87,21 @@ VITE_API_URL=https://your-backend-url.com/api
    npm run build
    ```
 
-## Offline Mode
-
-The app gracefully handles backend connectivity issues:
-
-- **API Failures**: Automatically falls back to localStorage
-- **Data Persistence**: All quiz results and progress stored locally
-- **Seamless Experience**: Users can continue using the app without interruption
-
 ## API Integration
 
-The app uses a dual approach for data storage:
+The app requires a backend API for full functionality:
 
-1. **Primary**: Backend API (when available)
-2. **Fallback**: localStorage (when backend is unavailable)
+- **Backend Required**: All data is stored and retrieved from the backend API
+- **Real-time Updates**: Progress and quiz results are synchronized with the server
+- **User Management**: User accounts and authentication handled by the backend
 
-This ensures the app works in all scenarios:
-- ✅ Backend deployed and accessible
-- ✅ Backend temporarily unavailable
-- ✅ No backend deployment
+## Backend Requirements
+
+The app requires a running backend server for:
+- ✅ User authentication and management
+- ✅ Quiz progress tracking and storage
+- ✅ Dashboard data and statistics
+- ✅ Real-time data synchronization
 
 ## Deployment
 
@@ -133,14 +129,7 @@ If you see connection refused errors in the console:
 1. **Check backend deployment**: Ensure your backend is running and accessible
 2. **Verify environment variables**: Check `VITE_API_URL` is set correctly
 3. **Test backend health**: Visit `your-backend-url.com/health`
-
-### localStorage Issues
-
-If the app isn't saving data:
-
-1. **Check browser support**: Ensure localStorage is enabled
-2. **Clear browser data**: Try clearing localStorage and refreshing
-3. **Check console errors**: Look for localStorage-related errors
+4. **Check network connectivity**: Ensure the frontend can reach the backend URL
 
 ## Contributing
 
