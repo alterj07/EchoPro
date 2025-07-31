@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import apiService from '../services/apiService';
 
@@ -7,9 +7,21 @@ interface User {
   email: string | null;
 }
 
+interface TodayProgress {
+  correct: number;
+  incorrect: number;
+  skipped: number;
+  total: number;
+  percent: number;
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  todayProgress: TodayProgress;
+  updateTodayProgress: (correct: number, incorrect: number, skipped: number) => void;
+  loadTodayProgressFromBackend: (userId: string) => Promise<void>;
+  saveTodayProgressToBackend: (userId: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (name: string, email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -21,6 +33,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [todayProgress, setTodayProgress] = useState<TodayProgress>({
+    correct: 0,
+    incorrect: 0,
+    skipped: 0,
+    total: 0,
+    percent: 0
+  });
 
   useEffect(() => {
     // Check for existing user in localStorage
@@ -30,6 +49,65 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     setLoading(false);
   }, []);
+
+  // Update today's progress locally
+  const updateTodayProgress = useCallback((correct: number, incorrect: number, skipped: number) => {
+    const total = correct + incorrect + skipped;
+    const percent = total > 0 ? (correct / total) * 100 : 0;
+    
+    const newProgress = {
+      correct,
+      incorrect,
+      skipped,
+      total,
+      percent
+    };
+    
+    console.log('AuthContext - Updating today progress:', newProgress);
+    setTodayProgress(newProgress);
+  }, []);
+
+  // Load today's progress from backend
+  const loadTodayProgressFromBackend = useCallback(async (userId: string) => {
+    try {
+      const userData = await apiService.getUser(userId);
+      if (userData && userData.progress && userData.progress.length > 0) {
+        const todayProgress = userData.progress.find((p: any) => p.period === 'daily');
+        if (todayProgress && todayProgress.stats) {
+          const { correctAnswers, incorrectAnswers, skippedAnswers, totalQuestions } = todayProgress.stats;
+          const total = totalQuestions || 0;
+          const percent = total > 0 ? (correctAnswers / total) * 100 : 0;
+          
+          const progress = {
+            correct: correctAnswers || 0,
+            incorrect: incorrectAnswers || 0,
+            skipped: skippedAnswers || 0,
+            total: total,
+            percent: percent
+          };
+          
+          console.log('AuthContext - Loaded today progress from backend:', progress);
+          setTodayProgress(progress);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading today progress from backend:', error);
+    }
+  }, []);
+
+  // Save today's progress to backend
+  const saveTodayProgressToBackend = useCallback(async (userId: string) => {
+    try {
+      await apiService.saveQuizState(userId, [], 0, {
+        correct: todayProgress.correct,
+        incorrect: todayProgress.incorrect,
+        skipped: todayProgress.skipped
+      });
+      console.log('AuthContext - Saved today progress to backend:', todayProgress);
+    } catch (error) {
+      console.error('Error saving today progress to backend:', error);
+    }
+  }, [todayProgress]);
 
   const signIn = async (email: string, password: string) => {
     setLoading(true);
@@ -58,6 +136,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       localStorage.setItem('currentUser', JSON.stringify(mockUser));
       setUser(mockUser);
+      
+      // Load today's progress from backend
+      await loadTodayProgressFromBackend(mockUser.uid);
     } catch (error) {
       console.error('Sign in error:', error);
       throw error;
@@ -132,8 +213,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signOut = async () => {
     setLoading(true);
     try {
-      // Clear quiz state for the current user before signing out
+      // Save today's progress to backend before signing out
       if (user?.uid) {
+        await saveTodayProgressToBackend(user.uid);
+        
         try {
           // Clear quiz state from localStorage
           const key = `quizState_${user.uid}`;
@@ -146,6 +229,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       localStorage.removeItem('currentUser');
       setUser(null);
+      
+      // Reset today's progress
+      setTodayProgress({
+        correct: 0,
+        incorrect: 0,
+        skipped: 0,
+        total: 0,
+        percent: 0
+      });
     } catch (error) {
       console.error('Sign out error:', error);
     } finally {
@@ -172,7 +264,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, googleSignIn }}>
+    <AuthContext.Provider value={{ user, loading, todayProgress, updateTodayProgress, loadTodayProgressFromBackend, saveTodayProgressToBackend, signIn, signUp, signOut, googleSignIn }}>
       {children}
     </AuthContext.Provider>
   );
@@ -185,3 +277,7 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 }; 
+
+
+
+

@@ -1,4 +1,4 @@
-import { createContext, useState, useCallback, useContext } from 'react';
+import { createContext, useState, useCallback, useContext, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import apiService from '../services/apiService';
 
@@ -29,11 +29,23 @@ export interface QuizState {
   startTime?: number;
 }
 
+// Local state for today's progress
+interface TodayProgress {
+  correct: number;
+  incorrect: number;
+  skipped: number;
+  total: number;
+  percent: number;
+}
+
 interface QuizContextType {
   quizState: QuizState | null;
   setQuizState: React.Dispatch<React.SetStateAction<QuizState | null>>;
   updateQuizProgress: (questionIndex: number, answer: string, isCorrect: boolean) => void;
   getTodayLiveProgress: (userId: string) => Promise<{correct: number, incorrect: number, skipped: number, total: number, percent: number}>;
+  todayProgress: TodayProgress;
+  updateTodayProgress: (correct: number, incorrect: number, skipped: number) => void;
+  saveTodayProgressToBackend: (userId: string) => Promise<void>;
 }
 
 const QuizContext = createContext<QuizContextType>({
@@ -41,12 +53,44 @@ const QuizContext = createContext<QuizContextType>({
   setQuizState: () => {},
   updateQuizProgress: () => {},
   getTodayLiveProgress: async () => ({correct: 0, incorrect: 0, skipped: 0, total: 0, percent: 0}),
+  todayProgress: { correct: 0, incorrect: 0, skipped: 0, total: 0, percent: 0 },
+  updateTodayProgress: () => {},
+  saveTodayProgressToBackend: async () => {},
 });
 
 export const QuizProvider = ({ children }: { children: ReactNode }) => {
   const [quizState, setQuizState] = useState<QuizState | null>(null);
+  const [todayProgress, setTodayProgress] = useState<TodayProgress>({
+    correct: 0,
+    incorrect: 0,
+    skipped: 0,
+    total: 0,
+    percent: 0
+  });
 
-  // NEW: Get today's live progress from backend
+  // Save progress when window is closed or page is unloaded
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // This will be called when the window is closed or page is refreshed
+      // Note: We can't make async calls here, but we can try to save synchronously
+      console.log('Window closing, today progress:', todayProgress);
+    };
+
+    const handlePageHide = () => {
+      // This is called when the page is hidden (tab switch, close, etc.)
+      console.log('Page hiding, today progress:', todayProgress);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handlePageHide);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handlePageHide);
+    };
+  }, [todayProgress]);
+
+  // Load today's progress from backend on login
   const getTodayLiveProgress = useCallback(async (userId: string) => {
     try {
       const userData = await apiService.getUser(userId);
@@ -58,22 +102,63 @@ export const QuizProvider = ({ children }: { children: ReactNode }) => {
           const total = correctAnswers + incorrectAnswers + skippedAnswers;
           const percent = total > 0 ? (correctAnswers / total) * 100 : 0;
           
-          return {
+          const progress = {
             correct: correctAnswers || 0,
             incorrect: incorrectAnswers || 0,
             skipped: skippedAnswers || 0,
             total: total,
             percent: percent
           };
+          
+          // Update local state with backend data
+          setTodayProgress(progress);
+          return progress;
         }
       }
       // Return default values if no progress found
-      return { correct: 0, incorrect: 0, skipped: 0, total: 0, percent: 0 };
+      const defaultProgress = { correct: 0, incorrect: 0, skipped: 0, total: 0, percent: 0 };
+      setTodayProgress(defaultProgress);
+      return defaultProgress;
     } catch (error) {
       console.error('Error getting today live progress:', error);
-      return { correct: 0, incorrect: 0, skipped: 0, total: 0, percent: 0 };
+      const defaultProgress = { correct: 0, incorrect: 0, skipped: 0, total: 0, percent: 0 };
+      setTodayProgress(defaultProgress);
+      return defaultProgress;
     }
   }, []);
+
+  // Update today's progress locally (no API call)
+  const updateTodayProgress = useCallback((correct: number, incorrect: number, skipped: number) => {
+    const total = correct + incorrect + skipped;
+    const percent = total > 0 ? (correct / total) * 100 : 0;
+    
+    const newProgress = {
+      correct,
+      incorrect,
+      skipped,
+      total,
+      percent
+    };
+    
+    console.log('QuizContext - Updating today progress:', newProgress);
+    console.log('QuizContext - Previous state:', todayProgress);
+    setTodayProgress(newProgress);
+    console.log('QuizContext - State update triggered');
+  }, []);
+
+  // Save today's progress to backend (called on logout/close)
+  const saveTodayProgressToBackend = useCallback(async (userId: string) => {
+    try {
+      await apiService.saveQuizState(userId, [], 0, {
+        correct: todayProgress.correct,
+        incorrect: todayProgress.incorrect,
+        skipped: todayProgress.skipped
+      });
+      console.log('Today progress saved to backend:', todayProgress);
+    } catch (error) {
+      console.error('Error saving today progress to backend:', error);
+    }
+  }, [todayProgress]);
 
   const updateQuizProgress = (questionIndex: number, answer: string, isCorrect: boolean) => {
     if (!quizState) return;
@@ -104,7 +189,10 @@ export const QuizProvider = ({ children }: { children: ReactNode }) => {
       quizState,
       setQuizState,
       updateQuizProgress,
-      getTodayLiveProgress
+      getTodayLiveProgress,
+      todayProgress,
+      updateTodayProgress,
+      saveTodayProgressToBackend
     }}>
       {children}
     </QuizContext.Provider>

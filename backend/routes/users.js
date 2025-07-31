@@ -489,6 +489,7 @@ router.post('/:userId/quiz-state', async (req, res) => {
       dailyProgress.stats.skippedAnswers = dailyStats.skipped || 0;
       dailyProgress.stats.totalQuestions = (dailyStats.correct || 0) + (dailyStats.incorrect || 0) + (dailyStats.skipped || 0);
     }
+    console.log('dailyProgress', dailyProgress);
     
     dailyProgress.lastUpdated = new Date();
     user.profile.lastActive = new Date();

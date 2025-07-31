@@ -23,10 +23,6 @@ interface DailyQuizData {
   skipped: number;
 }
 
-const DAILY_QUIZ_LIMIT = 20;
-const DAILY_QUIZ_KEY = 'dailyQuizData';
-const QUIZ_HISTORY_KEY = 'quizHistory';
-
 const ChecklistScreen = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -44,10 +40,60 @@ const ChecklistScreen = () => {
   const [volume, setVolume] = useState(0.5);
   const timerRef = useRef<number | null>(null);
   const autoStopRef = useRef<number | null>(null);
+  
+  // Flag to prevent multiple simultaneous API calls
+  const [isLoadingTracks, setIsLoadingTracks] = useState(false);
 
   const { user } = useAuth();
+  const { updateTodayProgress } = useAuth();
   const { setQuizState, updateQuizProgress, quizState } = useQuiz();
   const { updateProgress } = useUserProgress();
+
+  // Function to save daily stats to backend
+  const saveDailyStatsToBackend = async () => {
+    if (!user?.uid || !dailyData || dailyData.questionsAnswered === 0) return;
+    
+    try {
+      await apiService.saveQuizState(user.uid, questions, currentQuestionIndex, {
+        correct: dailyData.correct,
+        incorrect: dailyData.incorrect,
+        skipped: dailyData.skipped
+      });
+      console.log('Daily stats saved to backend on navigation:', dailyData);
+    } catch (error) {
+      console.error('Error saving daily stats on navigation:', error);
+    }
+  };
+
+  // Save stats when component unmounts or when navigating away
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (screen === 'quiz' && dailyData && dailyData.questionsAnswered > 0) {
+        saveDailyStatsToBackend();
+      }
+    };
+
+    const handlePageHide = () => {
+      if (screen === 'quiz' && dailyData && dailyData.questionsAnswered > 0) {
+        saveDailyStatsToBackend();
+      }
+    };
+
+    // Add event listeners for window close and navigation
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handlePageHide);
+
+    return () => {
+      // This cleanup function runs when component unmounts
+      if (screen === 'quiz' && dailyData && dailyData.questionsAnswered > 0) {
+        saveDailyStatsToBackend();
+      }
+      
+      // Remove event listeners
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handlePageHide);
+    };
+  }, [screen, dailyData]);
 
   // Load data when component mounts
   useEffect(() => {
@@ -69,19 +115,19 @@ const ChecklistScreen = () => {
         const todayProgress = userData.progress.find((p: any) => p.period === 'daily');
         
         if (todayProgress && todayProgress.stats) {
-          const { questionsAnswered, correct, incorrect, skipped } = todayProgress.stats;
+          const { totalQuestions, correctAnswers, incorrectAnswers, skippedAnswers } = todayProgress.stats;
           
-          // Set daily data
+          // Set daily data from backend
           setDailyData({
             date: today,
-            questionsAnswered: questionsAnswered || 0,
-            correct: correct || 0,
-            incorrect: incorrect || 0,
-            skipped: skipped || 0,
+            questionsAnswered: totalQuestions || 0,
+            correct: correctAnswers || 0,
+            incorrect: incorrectAnswers || 0,
+            skipped: skippedAnswers || 0,
           });
 
           // Check if there's an active quiz in progress (questions answered > 0 but < 10)
-          if (questionsAnswered > 0 && questionsAnswered < 10) {
+          if ((totalQuestions || 0) > 0 && (totalQuestions || 0) < 10) {
             // Check if there are saved questions in the user's progress
             if (todayProgress.quizQuestions && todayProgress.currentQuestionIndex !== undefined) {
               setQuestions(todayProgress.quizQuestions);
@@ -109,13 +155,13 @@ const ChecklistScreen = () => {
         const todayProgress = userData.progress.find((p: any) => p.period === 'daily');
         
         if (todayProgress && todayProgress.stats) {
-          const { questionsAnswered, correct, incorrect, skipped } = todayProgress.stats;
+          const { totalQuestions, correctAnswers, incorrectAnswers, skippedAnswers } = todayProgress.stats;
           setDailyData({
             date: today,
-            questionsAnswered: questionsAnswered || 0,
-            correct: correct || 0,
-            incorrect: incorrect || 0,
-            skipped: skipped || 0,
+            questionsAnswered: totalQuestions || 0,
+            correct: correctAnswers || 0,
+            incorrect: incorrectAnswers || 0,
+            skipped: skippedAnswers || 0,
           });
         } else {
           // Initialize for today
@@ -146,8 +192,15 @@ const ChecklistScreen = () => {
   };
 
   const loadTracks = async () => {
+    // Prevent multiple simultaneous API calls
+    if (isLoadingTracks) {
+      console.log('Tracks already loading, skipping...');
+      return;
+    }
+    
     try {
       console.log('Loading tracks...');
+      setIsLoadingTracks(true);
       setLoading(true);
       
       // Check if we have cached tracks from today
@@ -159,6 +212,17 @@ const ChecklistScreen = () => {
         const tracks = JSON.parse(cachedTracks);
         setTracks(tracks);
         setLoading(false);
+        setIsLoadingTracks(false);
+        return;
+      }
+      
+      // Check if we've been rate limited recently
+      const lastRateLimit = localStorage.getItem('last_rate_limit');
+      const now = Date.now();
+      if (lastRateLimit && (now - parseInt(lastRateLimit)) < 60000) { // 1 minute cooldown
+        console.log('Rate limit cooldown active, using fallback tracks');
+        useFallbackTracks();
+        setIsLoadingTracks(false);
         return;
       }
       
@@ -168,33 +232,9 @@ const ChecklistScreen = () => {
       if (!response.ok) {
         if (response.status === 429) {
           console.error('Rate limited by iTunes API. Using fallback tracks.');
-          // Use fallback tracks if rate limited
-          const fallbackTracks = [
-            { trackId: 1, trackName: "Shape of You", artistName: "Ed Sheeran", previewUrl: "", artworkUrl100: "" },
-            { trackId: 2, trackName: "Blinding Lights", artistName: "The Weeknd", previewUrl: "", artworkUrl100: "" },
-            { trackId: 3, trackName: "Dance Monkey", artistName: "Tones and I", previewUrl: "", artworkUrl100: "" },
-            { trackId: 4, trackName: "Bad Guy", artistName: "Billie Eilish", previewUrl: "", artworkUrl100: "" },
-            { trackId: 5, trackName: "Old Town Road", artistName: "Lil Nas X", previewUrl: "", artworkUrl100: "" },
-            { trackId: 6, trackName: "Someone You Loved", artistName: "Lewis Capaldi", previewUrl: "", artworkUrl100: "" },
-            { trackId: 7, trackName: "Truth Hurts", artistName: "Lizzo", previewUrl: "", artworkUrl100: "" },
-            { trackId: 8, trackName: "Sunflower", artistName: "Post Malone", previewUrl: "", artworkUrl100: "" },
-            { trackId: 9, trackName: "Señorita", artistName: "Shawn Mendes", previewUrl: "", artworkUrl100: "" },
-            { trackId: 10, trackName: "Circles", artistName: "Post Malone", previewUrl: "", artworkUrl100: "" },
-            { trackId: 11, trackName: "Lose You To Love Me", artistName: "Selena Gomez", previewUrl: "", artworkUrl100: "" },
-            { trackId: 12, trackName: "Memories", artistName: "Maroon 5", previewUrl: "", artworkUrl100: "" },
-            { trackId: 13, trackName: "10,000 Hours", artistName: "Dan + Shay", previewUrl: "", artworkUrl100: "" },
-            { trackId: 14, trackName: "Good As Hell", artistName: "Lizzo", previewUrl: "", artworkUrl100: "" },
-            { trackId: 15, trackName: "Beautiful People", artistName: "Ed Sheeran", previewUrl: "", artworkUrl100: "" },
-            { trackId: 16, trackName: "Lover", artistName: "Taylor Swift", previewUrl: "", artworkUrl100: "" },
-            { trackId: 17, trackName: "The Bones", artistName: "Maren Morris", previewUrl: "", artworkUrl100: "" },
-            { trackId: 18, trackName: "Roxanne", artistName: "Arizona Zervas", previewUrl: "", artworkUrl100: "" },
-            { trackId: 19, trackName: "Graveyard", artistName: "Halsey", previewUrl: "", artworkUrl100: "" },
-            { trackId: 20, trackName: "Don't Call Me Up", artistName: "Mabel", previewUrl: "", artworkUrl100: "" }
-          ];
-          setTracks(fallbackTracks);
-          // Cache the fallback tracks
-          localStorage.setItem(`cached_tracks_${today}`, JSON.stringify(fallbackTracks));
-          setLoading(false);
+          localStorage.setItem('last_rate_limit', now.toString());
+          useFallbackTracks();
+          setIsLoadingTracks(false);
           return;
         }
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -210,14 +250,45 @@ const ChecklistScreen = () => {
         localStorage.setItem(`cached_tracks_${today}`, JSON.stringify(data.results));
       } else {
         console.error('No tracks returned from iTunes API');
-        setTracks([]);
+        useFallbackTracks();
       }
     } catch (error) {
       console.error('Error loading tracks:', error);
-      setTracks([]);
+      useFallbackTracks();
     } finally {
       setLoading(false);
+      setIsLoadingTracks(false);
     }
+  };
+
+  // Helper function to use fallback tracks
+  const useFallbackTracks = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const fallbackTracks = [
+      { trackId: 1, trackName: "Shape of You", artistName: "Ed Sheeran", previewUrl: "", artworkUrl100: "" },
+      { trackId: 2, trackName: "Blinding Lights", artistName: "The Weeknd", previewUrl: "", artworkUrl100: "" },
+      { trackId: 3, trackName: "Dance Monkey", artistName: "Tones and I", previewUrl: "", artworkUrl100: "" },
+      { trackId: 4, trackName: "Bad Guy", artistName: "Billie Eilish", previewUrl: "", artworkUrl100: "" },
+      { trackId: 5, trackName: "Old Town Road", artistName: "Lil Nas X", previewUrl: "", artworkUrl100: "" },
+      { trackId: 6, trackName: "Someone You Loved", artistName: "Lewis Capaldi", previewUrl: "", artworkUrl100: "" },
+      { trackId: 7, trackName: "Truth Hurts", artistName: "Lizzo", previewUrl: "", artworkUrl100: "" },
+      { trackId: 8, trackName: "Sunflower", artistName: "Post Malone", previewUrl: "", artworkUrl100: "" },
+      { trackId: 9, trackName: "Señorita", artistName: "Shawn Mendes", previewUrl: "", artworkUrl100: "" },
+      { trackId: 10, trackName: "Circles", artistName: "Post Malone", previewUrl: "", artworkUrl100: "" },
+      { trackId: 11, trackName: "Lose You To Love Me", artistName: "Selena Gomez", previewUrl: "", artworkUrl100: "" },
+      { trackId: 12, trackName: "Memories", artistName: "Maroon 5", previewUrl: "", artworkUrl100: "" },
+      { trackId: 13, trackName: "10,000 Hours", artistName: "Dan + Shay", previewUrl: "", artworkUrl100: "" },
+      { trackId: 14, trackName: "Good As Hell", artistName: "Lizzo", previewUrl: "", artworkUrl100: "" },
+      { trackId: 15, trackName: "Beautiful People", artistName: "Ed Sheeran", previewUrl: "", artworkUrl100: "" },
+      { trackId: 16, trackName: "Lover", artistName: "Taylor Swift", previewUrl: "", artworkUrl100: "" },
+      { trackId: 17, trackName: "The Bones", artistName: "Maren Morris", previewUrl: "", artworkUrl100: "" },
+      { trackId: 18, trackName: "Roxanne", artistName: "Arizona Zervas", previewUrl: "", artworkUrl100: "" },
+      { trackId: 19, trackName: "Graveyard", artistName: "Halsey", previewUrl: "", artworkUrl100: "" },
+      { trackId: 20, trackName: "Don't Call Me Up", artistName: "Mabel", previewUrl: "", artworkUrl100: "" }
+    ];
+    setTracks(fallbackTracks);
+    // Cache the fallback tracks
+    localStorage.setItem(`cached_tracks_${today}`, JSON.stringify(fallbackTracks));
   };
 
   const generateQuizQuestions = (): Question[] => {
@@ -259,11 +330,6 @@ const ChecklistScreen = () => {
     console.log('dailyData:', dailyData);
     console.log('tracks length:', tracks.length);
     
-    if (!dailyData || dailyData.questionsAnswered >= DAILY_QUIZ_LIMIT) {
-      alert('Daily quiz limit reached. Come back tomorrow!');
-      return;
-    }
-
     const quizQuestions = generateQuizQuestions();
     console.log('Generated questions:', quizQuestions.length);
     
@@ -282,9 +348,9 @@ const ChecklistScreen = () => {
     if (user?.uid) {
       try {
         await apiService.saveQuizState(user.uid, quizQuestions, 0, {
-          correct: dailyData.correct,
-          incorrect: dailyData.incorrect,
-          skipped: dailyData.skipped
+          correct: dailyData?.correct || 0,
+          incorrect: dailyData?.incorrect || 0,
+          skipped: dailyData?.skipped || 0
         });
         console.log('Quiz state saved to backend');
       } catch (error) {
@@ -296,9 +362,9 @@ const ChecklistScreen = () => {
     const initialQuizState = {
       questions: quizQuestions,
       currentQuestionIndex: 0,
-      correctCount: dailyData.correct,
-      incorrectCount: dailyData.incorrect,
-      skippedCount: dailyData.skipped,
+      correctCount: dailyData?.correct || 0,
+      incorrectCount: dailyData?.incorrect || 0,
+      skippedCount: dailyData?.skipped || 0,
       quizId: `quiz_${Date.now()}`,
       startTime: Date.now(),
     };
@@ -314,7 +380,13 @@ const ChecklistScreen = () => {
   };
 
   const startQuestion = async () => {
-    if (!currentQuestion) return;
+    console.log('startQuestion called');
+    console.log('currentQuestion:', currentQuestion);
+    
+    if (!currentQuestion) {
+      console.log('No current question, returning');
+      return;
+    }
 
     try {
       // Clear any existing timers
@@ -327,6 +399,7 @@ const ChecklistScreen = () => {
       setPlaybackDuration(0);
       
       setIsPlaying(true);
+      console.log('Started playing question with duration:', duration);
 
       // Start timer for progress tracking
       timerRef.current = setInterval(() => {
@@ -344,6 +417,7 @@ const ChecklistScreen = () => {
       autoStopRef.current = setTimeout(async () => {
         setIsPlaying(false);
         if (timerRef.current) clearInterval(timerRef.current);
+        console.log('Auto-stopped question playback');
       }, duration * 1000);
 
     } catch (error) {
@@ -404,10 +478,19 @@ const ChecklistScreen = () => {
   };
 
   const handleAnswer = async (selectedAnswer: string) => {
-    if (!currentQuestion || !dailyData) return;
+    console.log('handleAnswer called with:', selectedAnswer);
+    console.log('currentQuestion:', currentQuestion);
+    console.log('dailyData:', dailyData);
+    
+    if (!currentQuestion || !dailyData) {
+      console.log('Early return - missing currentQuestion or dailyData');
+      return;
+    }
 
     const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
     const status: 'unanswered' | 'correct' | 'incorrect' | 'skipped' = selectedAnswer === 'idk' ? 'skipped' : (isCorrect ? 'correct' : 'incorrect');
+
+    console.log('Answer status:', status);
 
     // Update question
     const updatedQuestion = { ...currentQuestion, userAnswer: selectedAnswer, status };
@@ -415,7 +498,7 @@ const ChecklistScreen = () => {
     updatedQuestions[currentQuestionIndex] = updatedQuestion;
     setQuestions(updatedQuestions);
 
-    // Update daily data
+    // Update daily data locally (don't save to backend yet)
     const updatedDailyData = { ...dailyData };
     updatedDailyData.questionsAnswered += 1;
     
@@ -429,23 +512,25 @@ const ChecklistScreen = () => {
     
     setDailyData(updatedDailyData);
 
-    // Save updated questions and daily data to backend
+    // Update local progress in AuthContext (no API call)
+    updateTodayProgress(updatedDailyData.correct, updatedDailyData.incorrect, updatedDailyData.skipped);
+    console.log('Updated today progress in AuthContext:', { 
+      correct: updatedDailyData.correct, 
+      incorrect: updatedDailyData.incorrect, 
+      skipped: updatedDailyData.skipped 
+    });
+
+    // Save quiz state to backend (questions and current index, but not daily stats)
     if (user?.uid) {
       try {
         await apiService.saveQuizState(user.uid, updatedQuestions, currentQuestionIndex, {
-          correct: updatedDailyData.correct,
-          incorrect: updatedDailyData.incorrect,
-          skipped: updatedDailyData.skipped
+          correct: 0, // Don't save daily stats here
+          incorrect: 0,
+          skipped: 0
         });
       } catch (error) {
         console.error('Error saving quiz state:', error);
       }
-    }
-
-    // Update quiz state
-    if (user?.uid) {
-      // The following lines were removed as per the edit hint:
-      // await saveQuizState(user.uid);
     }
 
     // Show feedback and automatically move to next question
@@ -461,29 +546,31 @@ const ChecklistScreen = () => {
     updatedQuestions[currentQuestionIndex] = updatedQuestion;
     setQuestions(updatedQuestions);
 
-    // Update daily data
+    // Update daily data locally (don't save to backend yet)
     const updatedDailyData = { ...dailyData! };
     updatedDailyData.questionsAnswered += 1;
     updatedDailyData.skipped += 1;
     setDailyData(updatedDailyData);
 
-    // Save updated questions and daily data to backend
+    // Update local progress in AuthContext (no API call)
+    updateTodayProgress(updatedDailyData.correct, updatedDailyData.incorrect, updatedDailyData.skipped);
+    console.log('Updated today progress in AuthContext:', { 
+      correct: updatedDailyData.correct, 
+      incorrect: updatedDailyData.incorrect, 
+      skipped: updatedDailyData.skipped 
+    });
+
+    // Save quiz state to backend (questions and current index, but not daily stats)
     if (user?.uid) {
       try {
         await apiService.saveQuizState(user.uid, updatedQuestions, currentQuestionIndex, {
-          correct: updatedDailyData.correct,
-          incorrect: updatedDailyData.incorrect,
-          skipped: updatedDailyData.skipped
+          correct: 0, // Don't save daily stats here
+          incorrect: 0,
+          skipped: 0
         });
       } catch (error) {
         console.error('Error saving quiz state:', error);
       }
-    }
-
-    // Update quiz state
-    if (user?.uid) {
-      // The following lines were removed as per the edit hint:
-      // await saveQuizState(user.uid);
     }
 
     // Show feedback and automatically move to next question
@@ -491,15 +578,22 @@ const ChecklistScreen = () => {
   };
 
   const handleNextQuestion = () => {
+    console.log('handleNextQuestion called');
+    console.log('currentQuestionIndex:', currentQuestionIndex);
+    console.log('questions.length:', questions.length);
+    
     const nextIndex = currentQuestionIndex + 1;
     
     if (nextIndex >= questions.length) {
+      console.log('Quiz finished, calling finishQuiz');
+      // Don't save state here, let finishQuiz handle the final save
       finishQuiz();
     } else {
+      console.log('Moving to next question:', nextIndex);
       setCurrentQuestionIndex(nextIndex);
       setCurrentQuestion(questions[nextIndex]);
       
-      // Save current index to backend
+      // Save current index to backend only if not the last question
       if (user?.uid) {
         try {
           apiService.saveQuizState(user.uid, questions, nextIndex, {
@@ -518,6 +612,40 @@ const ChecklistScreen = () => {
   };
 
   const finishQuiz = async () => {
+    console.log('finishQuiz called');
+    
+    // Calculate final stats from the questions array
+    const correct = questions.filter(q => q.status === 'correct').length;
+    const incorrect = questions.filter(q => q.status === 'incorrect').length;
+    const skipped = questions.filter(q => q.status === 'skipped').length;
+    
+    console.log('Final stats:', { correct, incorrect, skipped, totalQuestions: questions.length });
+    
+    // Update daily data with final stats
+    const updatedDailyData = {
+      ...dailyData!,
+      questionsAnswered: questions.length,
+      correct: correct,
+      incorrect: incorrect,
+      skipped: skipped,
+    };
+    
+    setDailyData(updatedDailyData);
+
+    // Save final daily stats to backend
+    if (user?.uid) {
+      try {
+        await apiService.saveQuizState(user.uid, questions, currentQuestionIndex, {
+          correct: correct,
+          incorrect: incorrect,
+          skipped: skipped
+        });
+        console.log('Final daily stats saved to backend:', { correct, incorrect, skipped });
+      } catch (error) {
+        console.error('Error saving final daily stats:', error);
+      }
+    }
+
     // Clear saved quiz state from backend
     if (user?.uid) {
       try {
@@ -528,27 +656,12 @@ const ChecklistScreen = () => {
       }
     }
 
-    // Update daily data
-    const correct = questions.filter(q => q.status === 'correct').length;
-    const incorrect = questions.filter(q => q.status === 'incorrect').length;
-    const skipped = questions.filter(q => q.status === 'skipped').length;
-    
-    const updatedDailyData = {
-      ...dailyData!,
-      questionsAnswered: 10,
-      correct: correct,
-      incorrect: incorrect,
-      skipped: skipped,
-    };
-    
-    setDailyData(updatedDailyData);
-
     // Update backend progress
     try {
       if (user?.uid) {
         await updateProgress({
           quizId: `quiz_${Date.now()}`,
-          totalQuestions: 10,
+          totalQuestions: questions.length,
           correct: correct,
           incorrect: incorrect,
           skipped: skipped,
@@ -564,8 +677,8 @@ const ChecklistScreen = () => {
   };
 
   const renderStartScreen = () => {
-    // Check if there's an active quiz in progress
-    const hasActiveQuiz = dailyData && dailyData.questionsAnswered > 0 && dailyData.questionsAnswered < 10;
+    // Check if there's an active quiz in progress (questions answered but quiz not completed)
+    const hasActiveQuiz = dailyData && dailyData.questionsAnswered > 0 && questions.length > 0 && currentQuestionIndex < questions.length;
 
     return (
       <div style={{ padding: 20, textAlign: 'center', width: '100%', maxWidth: '100%' }}>
@@ -577,8 +690,10 @@ const ChecklistScreen = () => {
         {dailyData && (
           <div style={{ background: '#EFF6FF', padding: 16, borderRadius: 8, marginBottom: 24 }}>
             <h3 style={{ marginBottom: 8 }}>Today's Progress</h3>
-            <p>Questions: {dailyData.questionsAnswered}/{DAILY_QUIZ_LIMIT}</p>
+            <p>Questions Answered: {dailyData.questionsAnswered}</p>
             <p>Correct: {dailyData.correct}</p>
+            <p>Incorrect: {dailyData.incorrect}</p>
+            <p>Skipped: {dailyData.skipped}</p>
           </div>
         )}
         
@@ -600,7 +715,7 @@ const ChecklistScreen = () => {
               marginBottom: 12,
             }}
           >
-            🔄 Continue Quiz (Question {dailyData?.questionsAnswered || 0} of 10)
+            🔄 Continue Quiz (Question {dailyData?.questionsAnswered || 0} of {questions.length})
           </button>
         ) : (
           <button

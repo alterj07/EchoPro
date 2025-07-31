@@ -2,7 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { UserProgressProvider } from './contexts/UserProgressContext';
-import { QuizProvider } from './contexts/QuizContext';
+import { QuizProvider, useQuiz } from './contexts/QuizContext';
 import { FontSizeProvider } from './contexts/fontSizeContext';
 
 // Import screens
@@ -42,8 +42,23 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 // Navigation Component
 const Navigation: React.FC = () => {
   const { user, signOut } = useAuth();
+  const { saveTodayProgressToBackend } = useQuiz();
 
   if (!user) return null;
+
+  const handleSignOut = async () => {
+    try {
+      // Save today's progress to backend before signing out
+      if (user?.uid) {
+        await saveTodayProgressToBackend(user.uid);
+      }
+      await signOut();
+    } catch (error) {
+      console.error('Error during sign out:', error);
+      // Still sign out even if saving progress fails
+      await signOut();
+    }
+  };
 
   return (
     <nav style={{
@@ -112,7 +127,7 @@ const Navigation: React.FC = () => {
             Settings
           </Link>
           <button
-            onClick={signOut}
+            onClick={handleSignOut}
             style={{
               padding: '8px 16px',
               background: '#DC2626',

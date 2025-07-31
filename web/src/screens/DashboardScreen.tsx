@@ -45,35 +45,21 @@ function DashboardScreen() {
   const [period, setPeriod] = useState<Period>('week');
   const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
-  const { getTodayLiveProgress } = useQuiz();
+  const { todayProgress } = useAuth();
   const { userProgress, loading: progressLoading } = useUserProgress();
   const { user } = useAuth();
 
-  // State for today's live progress from backend
-  const [todayLiveProgress, setTodayLiveProgress] = useState({
-    correct: 0,
-    incorrect: 0,
-    skipped: 0,
-    total: 0,
-    percent: 0
-  });
+  // Calculate live progress values from AuthContext data
+  const liveCorrect = todayProgress.correct;
+  const liveIncorrect = todayProgress.incorrect;
+  const liveSkipped = todayProgress.skipped;
+  const liveTotal = todayProgress.total;
+  const livePercent = todayProgress.percent;
+  const livePerformanceColor = liveTotal > 0 ? (livePercent >= 80 ? '#4CAF50' : livePercent >= 60 ? '#FFC107' : '#F44336') : '#ccc';
 
-  // Load today's live progress from backend
-  const loadTodayLiveProgress = useCallback(async () => {
-    if (user?.uid) {
-      try {
-        const progress = await getTodayLiveProgress(user.uid);
-        setTodayLiveProgress(progress);
-      } catch (error) {
-        console.error('Error loading today live progress:', error);
-      }
-    }
-  }, [user?.uid, getTodayLiveProgress]);
-
-  // Load today's live progress when user changes
-  useEffect(() => {
-    loadTodayLiveProgress();
-  }, [loadTodayLiveProgress]);
+  // Debug logging
+  console.log('Dashboard - Today Progress from AuthContext:', todayProgress);
+  console.log('Dashboard - Live Stats:', { liveCorrect, liveIncorrect, liveSkipped, liveTotal, livePercent });
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
@@ -111,14 +97,6 @@ function DashboardScreen() {
   useEffect(() => {
     loadHistory();
   }, [period]); // Only depend on period, not the function
-
-  // Calculate live progress values from backend data
-  const liveCorrect = todayLiveProgress.correct;
-  const liveIncorrect = todayLiveProgress.incorrect;
-  const liveSkipped = todayLiveProgress.skipped;
-  const liveTotal = todayLiveProgress.total;
-  const livePercent = todayLiveProgress.percent;
-  const livePerformanceColor = liveTotal > 0 ? (livePercent >= 80 ? '#4CAF50' : livePercent >= 60 ? '#FFC107' : '#F44336') : '#ccc';
 
   const processQuizHistory = (history: QuizResult[], selectedPeriod: Period): PerformanceData => {
     let filteredHistory = history;
@@ -271,71 +249,47 @@ function DashboardScreen() {
           
         </div>
         
-        {todayLiveProgress && (
+        {todayProgress && (
           <div style={{
             backgroundColor: '#FFFFFF',
             padding: '24px',
-            borderRadius: '20px',
-            marginBottom: '24px',
+            borderRadius: '12px',
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            border: `3px solid ${livePerformanceColor}`
+            marginBottom: '24px'
           }}>
-            <h2 style={{ 
-              fontSize: '24px', 
+            <h3 style={{ 
+              fontSize: '20px', 
               fontWeight: 'bold', 
-              marginBottom: '20px',
-              color: '#1A1A1A',
-              letterSpacing: '0.5px',
-              margin: '0 0 20px 0'
+              marginBottom: '16px',
+              color: '#1F2937'
             }}>
               Today's Live Progress
-            </h2>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-around',
-              marginBottom: '24px'
-            }}>
-              <div style={{ textAlign: 'center', flex: 1 }}>
-                <div style={{ color: '#666666', fontSize: '16px', fontWeight: '600', marginBottom: '4px' }}>
-                  Correct
-                </div>
-                <div style={{ fontWeight: 'bold', fontSize: '24px', color: '#4CAF50' }}>
-                  {liveCorrect}
-                </div>
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '16px' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#10B981' }}>{liveCorrect}</div>
+                <div style={{ fontSize: '14px', color: '#6B7280' }}>Correct</div>
               </div>
-              <div style={{ textAlign: 'center', flex: 1 }}>
-                <div style={{ color: '#666666', fontSize: '16px', fontWeight: '600', marginBottom: '4px' }}>
-                  Incorrect
-                </div>
-                <div style={{ fontWeight: 'bold', fontSize: '24px', color: '#F44336' }}>
-                  {liveIncorrect}
-                </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#F59E0B' }}>{liveIncorrect}</div>
+                <div style={{ fontSize: '14px', color: '#6B7280' }}>Incorrect</div>
               </div>
-              <div style={{ textAlign: 'center', flex: 1 }}>
-                <div style={{ color: '#666666', fontSize: '16px', fontWeight: '600', marginBottom: '4px' }}>
-                  Skipped
-                </div>
-                <div style={{ fontWeight: 'bold', fontSize: '24px', color: '#FFC107' }}>
-                  {liveSkipped}
-                </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#6B7280' }}>{liveSkipped}</div>
+                <div style={{ fontSize: '14px', color: '#6B7280' }}>Skipped</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '24px', fontWeight: 'bold', color: livePerformanceColor }}>{liveTotal}</div>
+                <div style={{ fontSize: '14px', color: '#6B7280' }}>Total</div>
               </div>
             </div>
-            <div style={{ marginTop: '8px' }}>
-              <div style={{ fontSize: '18px', fontWeight: '600', color: '#1A1A1A', marginBottom: '8px' }}>
-                Success Rate: {livePercent.toFixed(0)}%
-              </div>
-              <div style={{
-                height: '12px',
-                backgroundColor: '#E0E0E0',
-                borderRadius: '6px',
-                overflow: 'hidden'
+            <div style={{ marginTop: '16px', textAlign: 'center' }}>
+              <div style={{ 
+                fontSize: '18px', 
+                fontWeight: 'bold', 
+                color: livePerformanceColor 
               }}>
-                <div style={{
-                  height: '100%',
-                  borderRadius: '6px',
-                  width: `${livePercent}%`,
-                  backgroundColor: livePerformanceColor
-                }} />
+                {livePercent.toFixed(1)}% Accuracy
               </div>
             </div>
           </div>
