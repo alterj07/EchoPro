@@ -41,8 +41,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // Navigation Component
 const Navigation: React.FC = () => {
-  const { user, signOut } = useAuth();
-  const { saveTodayProgressToBackend } = useQuiz();
+  const { user, signOut, saveTodayProgressToBackend } = useAuth();
 
   if (!user) return null;
 

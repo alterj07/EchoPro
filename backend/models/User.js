@@ -294,8 +294,303 @@ userSchema.index({ 'stats.lastQuizDate': -1 });
 userSchema.index({ 'stats.overallAccuracy': -1 });
 userSchema.index({ 'stats.currentStreak': -1 });
 
+// Method to roll up stats when periods pass
+userSchema.methods.rollupStats = async function() {
+  const now = new Date();
+  
+  // Check if daily period has passed and roll up to weekly
+  const dailyProgress = this.progress.find(p => p.period === 'daily');
+  if (dailyProgress && dailyProgress.endDate < now) {
+    console.log('Rolling up daily stats to weekly for user:', this.userId);
+    
+    // Get or create weekly progress
+    let weeklyProgress = this.progress.find(p => p.period === 'weekly');
+    if (!weeklyProgress) {
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1));
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weekEnd.setHours(23, 59, 59);
+      
+      weeklyProgress = {
+        period: 'weekly',
+        startDate: weekStart,
+        endDate: weekEnd,
+        stats: {
+          totalQuizzes: 0,
+          totalQuestions: 0,
+          correctAnswers: 0,
+          incorrectAnswers: 0,
+          skippedAnswers: 0,
+          averageScore: 0,
+          bestScore: 0,
+          worstScore: 0,
+          streakDays: 0,
+          currentStreak: 0,
+          longestStreak: 0
+        },
+        history: []
+      };
+      this.progress.push(weeklyProgress);
+    }
+    
+    // Add daily stats to weekly
+    weeklyProgress.stats.totalQuizzes += dailyProgress.stats.totalQuizzes;
+    weeklyProgress.stats.totalQuestions += dailyProgress.stats.totalQuestions;
+    weeklyProgress.stats.correctAnswers += dailyProgress.stats.correctAnswers;
+    weeklyProgress.stats.incorrectAnswers += dailyProgress.stats.incorrectAnswers;
+    weeklyProgress.stats.skippedAnswers += dailyProgress.stats.skippedAnswers;
+    
+    // Recalculate weekly averages
+    if (weeklyProgress.stats.totalQuizzes > 0) {
+      weeklyProgress.stats.averageScore = (weeklyProgress.stats.correctAnswers / weeklyProgress.stats.totalQuestions) * 100;
+    }
+    
+    // Add daily history to weekly
+    weeklyProgress.history.push(...dailyProgress.history);
+    
+    // Reset daily progress for new day
+    const newDayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const newDayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    
+    dailyProgress.startDate = newDayStart;
+    dailyProgress.endDate = newDayEnd;
+    dailyProgress.stats = {
+      totalQuizzes: 0,
+      totalQuestions: 0,
+      correctAnswers: 0,
+      incorrectAnswers: 0,
+      skippedAnswers: 0,
+      averageScore: 0,
+      bestScore: 0,
+      worstScore: 0,
+      streakDays: 0,
+      currentStreak: 0,
+      longestStreak: 0
+    };
+    dailyProgress.history = [];
+    dailyProgress.quizQuestions = [];
+    dailyProgress.currentQuestionIndex = 0;
+  }
+  
+  // Check if weekly period has passed and roll up to monthly
+  const weeklyProgress = this.progress.find(p => p.period === 'weekly');
+  if (weeklyProgress && weeklyProgress.endDate < now) {
+    console.log('Rolling up weekly stats to monthly for user:', this.userId);
+    
+    // Get or create monthly progress
+    let monthlyProgress = this.progress.find(p => p.period === 'monthly');
+    if (!monthlyProgress) {
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      
+      monthlyProgress = {
+        period: 'monthly',
+        startDate: monthStart,
+        endDate: monthEnd,
+        stats: {
+          totalQuizzes: 0,
+          totalQuestions: 0,
+          correctAnswers: 0,
+          incorrectAnswers: 0,
+          skippedAnswers: 0,
+          averageScore: 0,
+          bestScore: 0,
+          worstScore: 0,
+          streakDays: 0,
+          currentStreak: 0,
+          longestStreak: 0
+        },
+        history: []
+      };
+      this.progress.push(monthlyProgress);
+    }
+    
+    // Add weekly stats to monthly
+    monthlyProgress.stats.totalQuizzes += weeklyProgress.stats.totalQuizzes;
+    monthlyProgress.stats.totalQuestions += weeklyProgress.stats.totalQuestions;
+    monthlyProgress.stats.correctAnswers += weeklyProgress.stats.correctAnswers;
+    monthlyProgress.stats.incorrectAnswers += weeklyProgress.stats.incorrectAnswers;
+    monthlyProgress.stats.skippedAnswers += weeklyProgress.stats.skippedAnswers;
+    
+    // Recalculate monthly averages
+    if (monthlyProgress.stats.totalQuizzes > 0) {
+      monthlyProgress.stats.averageScore = (monthlyProgress.stats.correctAnswers / monthlyProgress.stats.totalQuestions) * 100;
+    }
+    
+    // Add weekly history to monthly
+    monthlyProgress.history.push(...weeklyProgress.history);
+    
+    // Reset weekly progress for new week
+    const newWeekStart = new Date(now);
+    newWeekStart.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1));
+    const newWeekEnd = new Date(newWeekStart);
+    newWeekEnd.setDate(newWeekStart.getDate() + 6);
+    newWeekEnd.setHours(23, 59, 59);
+    
+    weeklyProgress.startDate = newWeekStart;
+    weeklyProgress.endDate = newWeekEnd;
+    weeklyProgress.stats = {
+      totalQuizzes: 0,
+      totalQuestions: 0,
+      correctAnswers: 0,
+      incorrectAnswers: 0,
+      skippedAnswers: 0,
+      averageScore: 0,
+      bestScore: 0,
+      worstScore: 0,
+      streakDays: 0,
+      currentStreak: 0,
+      longestStreak: 0
+    };
+    weeklyProgress.history = [];
+  }
+  
+  // Check if monthly period has passed and roll up to yearly
+  const monthlyProgress = this.progress.find(p => p.period === 'monthly');
+  if (monthlyProgress && monthlyProgress.endDate < now) {
+    console.log('Rolling up monthly stats to yearly for user:', this.userId);
+    
+    // Get or create yearly progress
+    let yearlyProgress = this.progress.find(p => p.period === 'yearly');
+    if (!yearlyProgress) {
+      const yearStart = new Date(now.getFullYear(), 0, 1);
+      const yearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+      
+      yearlyProgress = {
+        period: 'yearly',
+        startDate: yearStart,
+        endDate: yearEnd,
+        stats: {
+          totalQuizzes: 0,
+          totalQuestions: 0,
+          correctAnswers: 0,
+          incorrectAnswers: 0,
+          skippedAnswers: 0,
+          averageScore: 0,
+          bestScore: 0,
+          worstScore: 0,
+          streakDays: 0,
+          currentStreak: 0,
+          longestStreak: 0
+        },
+        history: []
+      };
+      this.progress.push(yearlyProgress);
+    }
+    
+    // Add monthly stats to yearly
+    yearlyProgress.stats.totalQuizzes += monthlyProgress.stats.totalQuizzes;
+    yearlyProgress.stats.totalQuestions += monthlyProgress.stats.totalQuestions;
+    yearlyProgress.stats.correctAnswers += monthlyProgress.stats.correctAnswers;
+    yearlyProgress.stats.incorrectAnswers += monthlyProgress.stats.incorrectAnswers;
+    yearlyProgress.stats.skippedAnswers += monthlyProgress.stats.skippedAnswers;
+    
+    // Recalculate yearly averages
+    if (yearlyProgress.stats.totalQuizzes > 0) {
+      yearlyProgress.stats.averageScore = (yearlyProgress.stats.correctAnswers / yearlyProgress.stats.totalQuestions) * 100;
+    }
+    
+    // Add monthly history to yearly
+    yearlyProgress.history.push(...monthlyProgress.history);
+    
+    // Reset monthly progress for new month
+    const newMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const newMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    
+    monthlyProgress.startDate = newMonthStart;
+    monthlyProgress.endDate = newMonthEnd;
+    monthlyProgress.stats = {
+      totalQuizzes: 0,
+      totalQuestions: 0,
+      correctAnswers: 0,
+      incorrectAnswers: 0,
+      skippedAnswers: 0,
+      averageScore: 0,
+      bestScore: 0,
+      worstScore: 0,
+      streakDays: 0,
+      currentStreak: 0,
+      longestStreak: 0
+    };
+    monthlyProgress.history = [];
+  }
+  
+  // Check if yearly period has passed and roll up to all-time
+  const yearlyProgress = this.progress.find(p => p.period === 'yearly');
+  if (yearlyProgress && yearlyProgress.endDate < now) {
+    console.log('Rolling up yearly stats to all-time for user:', this.userId);
+    
+    // Get or create all-time progress
+    let allTimeProgress = this.progress.find(p => p.period === 'all-time');
+    if (!allTimeProgress) {
+      allTimeProgress = {
+        period: 'all-time',
+        startDate: new Date(0),
+        endDate: new Date(8640000000000000),
+        stats: {
+          totalQuizzes: 0,
+          totalQuestions: 0,
+          correctAnswers: 0,
+          incorrectAnswers: 0,
+          skippedAnswers: 0,
+          averageScore: 0,
+          bestScore: 0,
+          worstScore: 0,
+          streakDays: 0,
+          currentStreak: 0,
+          longestStreak: 0
+        },
+        history: []
+      };
+      this.progress.push(allTimeProgress);
+    }
+    
+    // Add yearly stats to all-time
+    allTimeProgress.stats.totalQuizzes += yearlyProgress.stats.totalQuizzes;
+    allTimeProgress.stats.totalQuestions += yearlyProgress.stats.totalQuestions;
+    allTimeProgress.stats.correctAnswers += yearlyProgress.stats.correctAnswers;
+    allTimeProgress.stats.incorrectAnswers += yearlyProgress.stats.incorrectAnswers;
+    allTimeProgress.stats.skippedAnswers += yearlyProgress.stats.skippedAnswers;
+    
+    // Recalculate all-time averages
+    if (allTimeProgress.stats.totalQuizzes > 0) {
+      allTimeProgress.stats.averageScore = (allTimeProgress.stats.correctAnswers / allTimeProgress.stats.totalQuestions) * 100;
+    }
+    
+    // Add yearly history to all-time
+    allTimeProgress.history.push(...yearlyProgress.history);
+    
+    // Reset yearly progress for new year
+    const newYearStart = new Date(now.getFullYear(), 0, 1);
+    const newYearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+    
+    yearlyProgress.startDate = newYearStart;
+    yearlyProgress.endDate = newYearEnd;
+    yearlyProgress.stats = {
+      totalQuizzes: 0,
+      totalQuestions: 0,
+      correctAnswers: 0,
+      incorrectAnswers: 0,
+      skippedAnswers: 0,
+      averageScore: 0,
+      bestScore: 0,
+      worstScore: 0,
+      streakDays: 0,
+      currentStreak: 0,
+      longestStreak: 0
+    };
+    yearlyProgress.history = [];
+  }
+  
+  await this.save();
+};
+
 // Method to update progress for a specific period
 userSchema.methods.updateProgress = async function(period, quizData) {
+  // First, check and roll up stats if periods have passed
+  await this.rollupStats();
+  
   const now = new Date();
   let startDate, endDate;
   

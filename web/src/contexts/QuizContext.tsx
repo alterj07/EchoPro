@@ -45,7 +45,6 @@ interface QuizContextType {
   getTodayLiveProgress: (userId: string) => Promise<{correct: number, incorrect: number, skipped: number, total: number, percent: number}>;
   todayProgress: TodayProgress;
   updateTodayProgress: (correct: number, incorrect: number, skipped: number) => void;
-  saveTodayProgressToBackend: (userId: string) => Promise<void>;
 }
 
 const QuizContext = createContext<QuizContextType>({
@@ -55,7 +54,6 @@ const QuizContext = createContext<QuizContextType>({
   getTodayLiveProgress: async () => ({correct: 0, incorrect: 0, skipped: 0, total: 0, percent: 0}),
   todayProgress: { correct: 0, incorrect: 0, skipped: 0, total: 0, percent: 0 },
   updateTodayProgress: () => {},
-  saveTodayProgressToBackend: async () => {},
 });
 
 export const QuizProvider = ({ children }: { children: ReactNode }) => {
@@ -146,20 +144,6 @@ export const QuizProvider = ({ children }: { children: ReactNode }) => {
     console.log('QuizContext - State update triggered');
   }, []);
 
-  // Save today's progress to backend (called on logout/close)
-  const saveTodayProgressToBackend = useCallback(async (userId: string) => {
-    try {
-      await apiService.saveQuizState(userId, [], 0, {
-        correct: todayProgress.correct,
-        incorrect: todayProgress.incorrect,
-        skipped: todayProgress.skipped
-      });
-      console.log('Today progress saved to backend:', todayProgress);
-    } catch (error) {
-      console.error('Error saving today progress to backend:', error);
-    }
-  }, [todayProgress]);
-
   const updateQuizProgress = (questionIndex: number, answer: string, isCorrect: boolean) => {
     if (!quizState) return;
 
@@ -192,7 +176,6 @@ export const QuizProvider = ({ children }: { children: ReactNode }) => {
       getTodayLiveProgress,
       todayProgress,
       updateTodayProgress,
-      saveTodayProgressToBackend
     }}>
       {children}
     </QuizContext.Provider>

@@ -65,18 +65,56 @@ function DashboardScreen() {
     setLoading(true);
     try {
       if (user?.uid) {
+        console.log('Dashboard - Loading history for user:', user.uid, 'period:', period);
         const dashboardData = await apiService.getDashboardData(user.uid, period);
+        console.log('Dashboard - Dashboard data received:', dashboardData);
+        
         if (dashboardData && dashboardData.history) {
+          console.log('Dashboard - History found:', dashboardData.history);
           // Convert backend data format to our format
           const history: QuizResult[] = dashboardData.history.map((item: any) => ({
-            date: item.date,
+            date: item.date || new Date().toISOString(),
             correct: item.correct || 0,
             incorrect: item.incorrect || 0,
             skipped: item.skipped || 0,
             total: (item.correct || 0) + (item.incorrect || 0) + (item.skipped || 0)
           }));
+          console.log('Dashboard - Converted history:', history);
           const data = processQuizHistory(history, period);
+          console.log('Dashboard - Processed data:', data);
           setPerformanceData(data);
+        } else {
+          console.log('Dashboard - No history found, checking for stats');
+          // If no history but we have stats, create a summary entry
+          if (dashboardData && (dashboardData.totalCorrect > 0 || dashboardData.totalIncorrect > 0 || dashboardData.totalSkipped > 0)) {
+            console.log('Dashboard - Creating summary from stats:', {
+              totalCorrect: dashboardData.totalCorrect,
+              totalIncorrect: dashboardData.totalIncorrect,
+              totalSkipped: dashboardData.totalSkipped
+            });
+            const summaryHistory: QuizResult[] = [{
+              date: new Date().toISOString(),
+              correct: dashboardData.totalCorrect || 0,
+              incorrect: dashboardData.totalIncorrect || 0,
+              skipped: dashboardData.totalSkipped || 0,
+              total: (dashboardData.totalCorrect || 0) + (dashboardData.totalIncorrect || 0) + (dashboardData.totalSkipped || 0)
+            }];
+            console.log('Dashboard - Summary history:', summaryHistory);
+            const data = processQuizHistory(summaryHistory, period);
+            console.log('Dashboard - Processed summary data:', data);
+            setPerformanceData(data);
+          } else {
+            console.log('Dashboard - No data available');
+            // No data available
+            setPerformanceData({
+              totalQuizzes: 0,
+              totalCorrect: 0,
+              totalIncorrect: 0,
+              totalSkipped: 0,
+              overallPercent: 0,
+              history: []
+            });
+          }
         }
       }
     } catch (e) {

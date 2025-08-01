@@ -162,7 +162,76 @@ class ApiService {
   }
 
   async getDashboardData(userId: string, period: string) {
-    return this.makeRequest(`/checklist/dashboard/${userId}/${period}`);
+    try {
+      // Get user data which includes progress
+      const userData = await this.getUser(userId);
+      console.log('getDashboardData - User data:', userData);
+      console.log('getDashboardData - Progress:', userData?.progress);
+      
+      if (!userData || !userData.progress) {
+        console.log('getDashboardData - No user data or progress found');
+        return {
+          period,
+          history: [],
+          totalQuizzes: 0,
+          totalCorrect: 0,
+          totalIncorrect: 0,
+          totalSkipped: 0
+        };
+      }
+      
+      // Map period names
+      const periodMap: { [key: string]: string } = {
+        'day': 'daily',
+        'week': 'weekly', 
+        'month': 'monthly',
+        'year': 'yearly',
+        'all': 'all-time'
+      };
+      
+      const backendPeriod = periodMap[period] || 'daily';
+      console.log('getDashboardData - Looking for period:', backendPeriod);
+      
+      // Find the progress for the requested period
+      const progress = userData.progress.find((p: any) => p.period === backendPeriod);
+      console.log('getDashboardData - Found progress:', progress);
+      
+      if (!progress) {
+        console.log('getDashboardData - No progress found for period:', backendPeriod);
+        return {
+          period,
+          history: [],
+          totalQuizzes: 0,
+          totalCorrect: 0,
+          totalIncorrect: 0,
+          totalSkipped: 0
+        };
+      }
+      
+      // Convert progress data to dashboard format
+      const { stats, history } = progress;
+      console.log('getDashboardData - Stats:', stats);
+      console.log('getDashboardData - History:', history);
+      
+      return {
+        period,
+        history: history || [],
+        totalQuizzes: stats.totalQuizzes || 0,
+        totalCorrect: stats.correctAnswers || 0,
+        totalIncorrect: stats.incorrectAnswers || 0,
+        totalSkipped: stats.skippedAnswers || 0
+      };
+    } catch (error) {
+      console.error('Error getting dashboard data:', error);
+      return {
+        period,
+        history: [],
+        totalQuizzes: 0,
+        totalCorrect: 0,
+        totalIncorrect: 0,
+        totalSkipped: 0
+      };
+    }
   }
 
   async getRecentResults(userId: string, limit: number = 10) {

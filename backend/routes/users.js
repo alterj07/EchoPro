@@ -135,6 +135,10 @@ router.post('/login', async (req, res) => {
     
     // Update last active time
     user.profile.lastActive = new Date();
+    
+    // Roll up stats if periods have passed
+    await user.rollupStats();
+    
     await user.save();
     
     // Don't return the password in the response
@@ -161,6 +165,9 @@ router.get('/:userId', async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
+    
+    // Roll up stats if periods have passed
+    await user.rollupStats();
     
     res.json(user);
   } catch (error) {
@@ -238,6 +245,9 @@ router.post('/:userId/progress', async (req, res) => {
       });
     }
     
+    // Roll up stats if periods have passed
+    await user.rollupStats();
+    
     // Update progress for all periods
     const periods = ['daily', 'weekly', 'monthly', 'yearly', 'all-time'];
     const updatedProgress = {};
@@ -284,6 +294,9 @@ router.get('/:userId/progress/:period', async (req, res) => {
         history: []
       });
     }
+    
+    // Roll up stats if periods have passed
+    await user.rollupStats();
     
     const progress = user.getProgress(period);
     if (!progress) {
@@ -339,6 +352,9 @@ router.get('/:userId/progress', async (req, res) => {
         progress: {}
       });
     }
+    
+    // Roll up stats if periods have passed
+    await user.rollupStats();
     
     const allProgress = user.getAllProgress();
     res.json({
@@ -488,6 +504,39 @@ router.post('/:userId/quiz-state', async (req, res) => {
       dailyProgress.stats.incorrectAnswers = dailyStats.incorrect || 0;
       dailyProgress.stats.skippedAnswers = dailyStats.skipped || 0;
       dailyProgress.stats.totalQuestions = (dailyStats.correct || 0) + (dailyStats.incorrect || 0) + (dailyStats.skipped || 0);
+      
+      // Add history entry if we have stats and it's not a duplicate
+      if (dailyStats.correct > 0 || dailyStats.incorrect > 0 || dailyStats.skipped > 0) {
+        const totalQuestions = (dailyStats.correct || 0) + (dailyStats.incorrect || 0) + (dailyStats.skipped || 0);
+        const score = totalQuestions > 0 ? ((dailyStats.correct || 0) / totalQuestions) * 100 : 0;
+        
+        // Check if we already have a recent entry with the same stats to prevent duplicates
+        const recentEntry = dailyProgress.history.find(entry => {
+          const timeDiff = Math.abs(new Date(entry.date).getTime() - Date.now());
+          return timeDiff < 5000 && // Within 5 seconds
+                 entry.correct === (dailyStats.correct || 0) &&
+                 entry.incorrect === (dailyStats.incorrect || 0) &&
+                 entry.skipped === (dailyStats.skipped || 0);
+        });
+        
+        if (!recentEntry) {
+          const historyEntry = {
+            date: new Date(),
+            quizId: `quiz_${Date.now()}`,
+            questionsAnswered: totalQuestions,
+            correct: dailyStats.correct || 0,
+            incorrect: dailyStats.incorrect || 0,
+            skipped: dailyStats.skipped || 0,
+            score: score,
+            timeSpent: 0
+          };
+          
+          dailyProgress.history.push(historyEntry);
+          console.log('Added new history entry:', historyEntry);
+        } else {
+          console.log('Skipped duplicate history entry - recent entry found:', recentEntry);
+        }
+      }
     }
     console.log('dailyProgress', dailyProgress);
     

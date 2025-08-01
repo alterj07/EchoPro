@@ -45,7 +45,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Check for existing user in localStorage
     const storedUser = localStorage.getItem('currentUser');
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+      
+      // Load today's progress from localStorage if available
+      const storedProgress = localStorage.getItem(`todayProgress_${parsedUser.uid}`);
+      if (storedProgress) {
+        try {
+          const progress = JSON.parse(storedProgress);
+          setTodayProgress(progress);
+          console.log('AuthContext - Loaded today progress from localStorage:', progress);
+        } catch (error) {
+          console.error('Error loading today progress from localStorage:', error);
+        }
+      }
     }
     setLoading(false);
   }, []);
@@ -65,7 +78,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     console.log('AuthContext - Updating today progress:', newProgress);
     setTodayProgress(newProgress);
-  }, []);
+    
+    // Save to localStorage if user is logged in
+    if (user?.uid) {
+      try {
+        localStorage.setItem(`todayProgress_${user.uid}`, JSON.stringify(newProgress));
+        console.log('AuthContext - Saved today progress to localStorage');
+      } catch (error) {
+        console.error('Error saving today progress to localStorage:', error);
+      }
+    }
+  }, [user?.uid]);
 
   // Load today's progress from backend
   const loadTodayProgressFromBackend = useCallback(async (userId: string) => {
@@ -88,6 +111,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           
           console.log('AuthContext - Loaded today progress from backend:', progress);
           setTodayProgress(progress);
+          
+          // Save to localStorage
+          try {
+            localStorage.setItem(`todayProgress_${userId}`, JSON.stringify(progress));
+            console.log('AuthContext - Saved today progress to localStorage from backend');
+          } catch (error) {
+            console.error('Error saving today progress to localStorage:', error);
+          }
         }
       }
     } catch (error) {
@@ -98,6 +129,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Save today's progress to backend
   const saveTodayProgressToBackend = useCallback(async (userId: string) => {
     try {
+      console.log('AuthContext - saveTodayProgressToBackend called with userId:', userId);
+      console.log('AuthContext - Current todayProgress:', todayProgress);
+      
       await apiService.saveQuizState(userId, [], 0, {
         correct: todayProgress.correct,
         incorrect: todayProgress.incorrect,
