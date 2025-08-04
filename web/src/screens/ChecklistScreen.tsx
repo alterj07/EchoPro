@@ -40,6 +40,7 @@ const ChecklistScreen = () => {
   const [volume, setVolume] = useState(0.5);
   const timerRef = useRef<number | null>(null);
   const autoStopRef = useRef<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   
   // Flag to prevent multiple simultaneous API calls
   const [isLoadingTracks, setIsLoadingTracks] = useState(false);
@@ -102,6 +103,19 @@ const ChecklistScreen = () => {
     loadSavedQuizState();
   }, [user?.uid]);
 
+  // Cleanup audio when component unmounts
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        audioRef.current = null;
+      }
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (autoStopRef.current) clearTimeout(autoStopRef.current);
+    };
+  }, []);
+
   // Load saved quiz state from backend when component mounts
   const loadSavedQuizState = async () => {
     if (!user?.uid) return;
@@ -146,12 +160,22 @@ const ChecklistScreen = () => {
 
   // Load daily quiz data from backend
   const loadDailyQuizData = async () => {
+    // Always initialize dailyData for today, regardless of API status
+    const today = new Date().toISOString().split('T')[0];
+    const newDailyData: DailyQuizData = {
+      date: today,
+      questionsAnswered: 0,
+      correct: 0,
+      incorrect: 0,
+      skipped: 0,
+    };
+    setDailyData(newDailyData);
+
     if (!user?.uid) return;
 
     try {
       const userData = await apiService.getUser(user.uid);
       if (userData && userData.progress && userData.progress.length > 0) {
-        const today = new Date().toISOString().split('T')[0];
         const todayProgress = userData.progress.find((p: any) => p.period === 'daily');
         
         if (todayProgress && todayProgress.stats) {
@@ -163,31 +187,11 @@ const ChecklistScreen = () => {
             incorrect: incorrectAnswers || 0,
             skipped: skippedAnswers || 0,
           });
-        } else {
-          // Initialize for today
-          const newDailyData: DailyQuizData = {
-            date: today,
-            questionsAnswered: 0,
-            correct: 0,
-            incorrect: 0,
-            skipped: 0,
-          };
-          setDailyData(newDailyData);
         }
-      } else {
-        // Initialize for today
-        const today = new Date().toISOString().split('T')[0];
-        const newDailyData: DailyQuizData = {
-          date: today,
-          questionsAnswered: 0,
-          correct: 0,
-          incorrect: 0,
-          skipped: 0,
-        };
-        setDailyData(newDailyData);
       }
     } catch (error) {
       console.error('Error loading daily quiz data:', error);
+      // Keep the initialized dailyData even if API fails
     }
   };
 
@@ -210,10 +214,19 @@ const ChecklistScreen = () => {
       if (cachedTracks) {
         console.log('Using cached tracks from today');
         const tracks = JSON.parse(cachedTracks);
-        setTracks(tracks);
-        setLoading(false);
-        setIsLoadingTracks(false);
-        return;
+        
+        // Check if cached tracks have previewUrl values
+        const hasPreviewUrls = tracks.some((track: any) => track.previewUrl && track.previewUrl.trim() !== '');
+        
+        if (hasPreviewUrls) {
+          setTracks(tracks);
+          setLoading(false);
+          setIsLoadingTracks(false);
+          return;
+        } else {
+          console.log('Cached tracks missing previewUrl values, using fallback tracks');
+          localStorage.removeItem(`cached_tracks_${today}`); // Clear invalid cache
+        }
       }
       
       // Check if we've been rate limited recently
@@ -245,9 +258,19 @@ const ChecklistScreen = () => {
       console.log('Tracks count:', data.results?.length || 0);
       
       if (data.results && data.results.length > 0) {
-        setTracks(data.results);
-        // Cache the tracks for today
-        localStorage.setItem(`cached_tracks_${today}`, JSON.stringify(data.results));
+        // Check if iTunes tracks have previewUrl values
+        const tracksWithPreviewUrls = data.results.filter((track: any) => 
+          track.previewUrl && track.previewUrl.trim() !== ''
+        );
+        
+        if (tracksWithPreviewUrls.length >= 10) {
+          setTracks(tracksWithPreviewUrls);
+          // Cache the tracks for today
+          localStorage.setItem(`cached_tracks_${today}`, JSON.stringify(tracksWithPreviewUrls));
+        } else {
+          console.log('iTunes tracks missing previewUrl values, using fallback tracks');
+          useFallbackTracks();
+        }
       } else {
         console.error('No tracks returned from iTunes API');
         useFallbackTracks();
@@ -261,31 +284,41 @@ const ChecklistScreen = () => {
     }
   };
 
+  // Helper function to clear cache and force fresh tracks
+  const clearCache = () => {
+    const today = new Date().toISOString().split('T')[0];
+    localStorage.removeItem(`cached_tracks_${today}`);
+    localStorage.removeItem('last_rate_limit');
+    console.log('Cache cleared, will load fresh tracks');
+    loadTracks();
+  };
+
   // Helper function to use fallback tracks
   const useFallbackTracks = () => {
     const today = new Date().toISOString().split('T')[0];
     const fallbackTracks = [
-      { trackId: 1, trackName: "Shape of You", artistName: "Ed Sheeran", previewUrl: "", artworkUrl100: "" },
-      { trackId: 2, trackName: "Blinding Lights", artistName: "The Weeknd", previewUrl: "", artworkUrl100: "" },
-      { trackId: 3, trackName: "Dance Monkey", artistName: "Tones and I", previewUrl: "", artworkUrl100: "" },
-      { trackId: 4, trackName: "Bad Guy", artistName: "Billie Eilish", previewUrl: "", artworkUrl100: "" },
-      { trackId: 5, trackName: "Old Town Road", artistName: "Lil Nas X", previewUrl: "", artworkUrl100: "" },
-      { trackId: 6, trackName: "Someone You Loved", artistName: "Lewis Capaldi", previewUrl: "", artworkUrl100: "" },
-      { trackId: 7, trackName: "Truth Hurts", artistName: "Lizzo", previewUrl: "", artworkUrl100: "" },
-      { trackId: 8, trackName: "Sunflower", artistName: "Post Malone", previewUrl: "", artworkUrl100: "" },
-      { trackId: 9, trackName: "Señorita", artistName: "Shawn Mendes", previewUrl: "", artworkUrl100: "" },
-      { trackId: 10, trackName: "Circles", artistName: "Post Malone", previewUrl: "", artworkUrl100: "" },
-      { trackId: 11, trackName: "Lose You To Love Me", artistName: "Selena Gomez", previewUrl: "", artworkUrl100: "" },
-      { trackId: 12, trackName: "Memories", artistName: "Maroon 5", previewUrl: "", artworkUrl100: "" },
-      { trackId: 13, trackName: "10,000 Hours", artistName: "Dan + Shay", previewUrl: "", artworkUrl100: "" },
-      { trackId: 14, trackName: "Good As Hell", artistName: "Lizzo", previewUrl: "", artworkUrl100: "" },
-      { trackId: 15, trackName: "Beautiful People", artistName: "Ed Sheeran", previewUrl: "", artworkUrl100: "" },
-      { trackId: 16, trackName: "Lover", artistName: "Taylor Swift", previewUrl: "", artworkUrl100: "" },
-      { trackId: 17, trackName: "The Bones", artistName: "Maren Morris", previewUrl: "", artworkUrl100: "" },
-      { trackId: 18, trackName: "Roxanne", artistName: "Arizona Zervas", previewUrl: "", artworkUrl100: "" },
-      { trackId: 19, trackName: "Graveyard", artistName: "Halsey", previewUrl: "", artworkUrl100: "" },
-      { trackId: 20, trackName: "Don't Call Me Up", artistName: "Mabel", previewUrl: "", artworkUrl100: "" }
+      { trackId: 1, trackName: "Shape of You", artistName: "Ed Sheeran", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 2, trackName: "Blinding Lights", artistName: "The Weeknd", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 3, trackName: "Dance Monkey", artistName: "Tones and I", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 4, trackName: "Bad Guy", artistName: "Billie Eilish", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 5, trackName: "Old Town Road", artistName: "Lil Nas X", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 6, trackName: "Someone You Loved", artistName: "Lewis Capaldi", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 7, trackName: "Truth Hurts", artistName: "Lizzo", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 8, trackName: "Sunflower", artistName: "Post Malone", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 9, trackName: "Señorita", artistName: "Shawn Mendes", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 10, trackName: "Circles", artistName: "Post Malone", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 11, trackName: "Lose You To Love Me", artistName: "Selena Gomez", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 12, trackName: "Memories", artistName: "Maroon 5", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 13, trackName: "10,000 Hours", artistName: "Dan + Shay", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 14, trackName: "Good As Hell", artistName: "Lizzo", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 15, trackName: "Beautiful People", artistName: "Ed Sheeran", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 16, trackName: "Lover", artistName: "Taylor Swift", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 17, trackName: "The Bones", artistName: "Maren Morris", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 18, trackName: "Roxanne", artistName: "Arizona Zervas", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 19, trackName: "Graveyard", artistName: "Halsey", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
+      { trackId: 20, trackName: "Don't Call Me Up", artistName: "Mabel", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" }
     ];
+    console.log('Using fallback tracks with previewUrl values:', fallbackTracks.map(t => ({ name: t.trackName, previewUrl: t.previewUrl })));
     setTracks(fallbackTracks);
     // Cache the fallback tracks
     localStorage.setItem(`cached_tracks_${today}`, JSON.stringify(fallbackTracks));
@@ -293,19 +326,71 @@ const ChecklistScreen = () => {
 
   const generateQuizQuestions = (): Question[] => {
     console.log('generateQuizQuestions called with tracks:', tracks.length);
+    console.log('Sample tracks with previewUrl:', tracks.slice(0, 3).map(t => ({ name: t.trackName, previewUrl: t.previewUrl })));
     const shuffledTracks = [...tracks].sort(() => Math.random() - 0.5);
     console.log('Shuffled tracks length:', shuffledTracks.length);
     
     const questions = shuffledTracks.slice(0, 10).map((track, index) => {
       const otherTracks = shuffledTracks.filter(t => t.trackId !== track.trackId);
-      const options = [track.artistName];
+      const options = [track.trackName];
       
-      // Add 3 random incorrect options
-      for (let i = 0; i < 3; i++) {
+      // Helper function to check if two song titles are similar
+      const areSimilarTitles = (title1: string, title2: string): boolean => {
+        const cleanTitle1 = title1.toLowerCase().replace(/[^\w\s]/g, '').trim();
+        const cleanTitle2 = title2.toLowerCase().replace(/[^\w\s]/g, '').trim();
+        
+        // If titles are exactly the same (ignoring case and punctuation), they're similar
+        if (cleanTitle1 === cleanTitle2) return true;
+        
+        // If one title is contained within the other, they're similar
+        if (cleanTitle1.includes(cleanTitle2) || cleanTitle2.includes(cleanTitle1)) return true;
+        
+        // Check if they share the same main word (e.g., "Popular" in different variations)
+        const mainWords1 = cleanTitle1.split(/\s+/).filter(word => word.length > 2);
+        const mainWords2 = cleanTitle2.split(/\s+/).filter(word => word.length > 2);
+        
+        // If they share any main word, they're similar
+        const hasSharedMainWord = mainWords1.some(word1 => 
+          mainWords2.some(word2 => word1 === word2 || word1.includes(word2) || word2.includes(word1))
+        );
+        
+        if (hasSharedMainWord) return true;
+        
+        // Check if more than 50% of words match
+        const matchingWords = mainWords1.filter(word => 
+          mainWords2.some(w => w === word || w.includes(word) || word.includes(w))
+        );
+        
+        const similarityRatio = matchingWords.length / Math.max(mainWords1.length, mainWords2.length);
+        return similarityRatio > 0.5;
+      };
+      
+      // Add 3 random incorrect options that are not similar to the correct answer
+      let attempts = 0;
+      const maxAttempts = 50; // Prevent infinite loops
+      
+      for (let i = 0; i < 3 && attempts < maxAttempts; i++) {
         const randomTrack = otherTracks[Math.floor(Math.random() * otherTracks.length)];
-        if (randomTrack && !options.includes(randomTrack.artistName)) {
-          options.push(randomTrack.artistName);
+        if (randomTrack && 
+            !options.includes(randomTrack.trackName) && 
+            !areSimilarTitles(track.trackName, randomTrack.trackName)) {
+          options.push(randomTrack.trackName);
+        } else {
+          if (randomTrack) {
+            console.log(`Filtered out similar option: "${randomTrack.trackName}" for correct answer: "${track.trackName}"`);
+          }
+          attempts++;
+          i--; // Retry this iteration
         }
+      }
+      
+      // If we couldn't find enough dissimilar options, fill with any unique options
+      while (options.length < 4 && attempts < maxAttempts) {
+        const randomTrack = otherTracks[Math.floor(Math.random() * otherTracks.length)];
+        if (randomTrack && !options.includes(randomTrack.trackName)) {
+          options.push(randomTrack.trackName);
+        }
+        attempts++;
       }
       
       // Shuffle options
@@ -315,7 +400,7 @@ const ChecklistScreen = () => {
         id: `question_${index}`,
         track,
         options: shuffledOptions,
-        correctAnswer: track.artistName,
+        correctAnswer: track.trackName,
         userAnswer: null,
         status: 'unanswered' as const
       };
@@ -377,6 +462,11 @@ const ChecklistScreen = () => {
       // The following lines were removed as per the edit hint:
       // await saveQuizState(user.uid);
     }
+    
+    // Start the first question
+    setTimeout(() => {
+      startQuestion();
+    }, 100); // Small delay to ensure state is set
   };
 
   const startQuestion = async () => {
@@ -389,19 +479,96 @@ const ChecklistScreen = () => {
     }
 
     try {
-      // Clear any existing timers
+      // Clear any existing timers and audio
       if (timerRef.current) clearInterval(timerRef.current);
       if (autoStopRef.current) clearTimeout(autoStopRef.current);
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = ''; // Clear the source
+        audioRef.current = null;
+      }
+      setIsPlaying(false);
+      setPlaybackDuration(0);
 
-      // For web, we'll simulate audio playback with a timer
-      const duration = Math.floor(Math.random() * 21) + 10; // 10-30 seconds
+      // Create new audio element
+      console.log('Loading audio from URL:', currentQuestion.track.previewUrl);
+      
+      // Check if previewUrl is empty or invalid
+      if (!currentQuestion.track.previewUrl || currentQuestion.track.previewUrl.trim() === '') {
+        console.log('No preview URL available, using fallback timer');
+        throw new Error('No preview URL available');
+      }
+      
+      const audio = new Audio(currentQuestion.track.previewUrl);
+      audioRef.current = audio;
+      
+      // Set volume
+      audio.volume = volume;
+      
+      // Set up audio event listeners
+      audio.addEventListener('loadedmetadata', () => {
+        console.log('Audio loaded, duration:', audio.duration);
+        setMaxPlaybackTime(Math.min(audio.duration, 30)); // Cap at 30 seconds
+      });
+
+      audio.addEventListener('timeupdate', () => {
+        setPlaybackDuration(Math.floor(audio.currentTime));
+      });
+
+      audio.addEventListener('ended', () => {
+        console.log('Audio ended naturally');
+        setIsPlaying(false);
+        if (timerRef.current) clearInterval(timerRef.current);
+      });
+
+      audio.addEventListener('error', (e) => {
+        console.error('Audio error:', e);
+        setIsPlaying(false);
+        // Fallback to timer-based simulation if audio fails
+        const duration = Math.floor(Math.random() * 21) + 10;
+        setMaxPlaybackTime(duration);
+        setPlaybackDuration(0);
+        
+        timerRef.current = setInterval(() => {
+          setPlaybackDuration(prev => {
+            if (prev >= duration) {
+              if (timerRef.current) clearInterval(timerRef.current);
+              setIsPlaying(false);
+              return prev;
+            }
+            return prev + 1;
+          });
+        }, 1000);
+
+        autoStopRef.current = setTimeout(() => {
+          setIsPlaying(false);
+          if (timerRef.current) clearInterval(timerRef.current);
+        }, duration * 1000);
+      });
+
+      // Start playing
+      await audio.play();
+      setIsPlaying(true);
+      console.log('Started playing track:', currentQuestion.track.trackName);
+
+      // Auto-stop after 30 seconds (iTunes preview limit)
+      autoStopRef.current = setTimeout(() => {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current = null;
+        }
+        setIsPlaying(false);
+        console.log('Auto-stopped question playback');
+      }, 30000);
+
+    } catch (error) {
+      console.error('Error playing track:', error);
+      // Fallback to timer-based simulation
+      const duration = Math.floor(Math.random() * 21) + 10;
       setMaxPlaybackTime(duration);
       setPlaybackDuration(0);
-      
       setIsPlaying(true);
-      console.log('Started playing question with duration:', duration);
-
-      // Start timer for progress tracking
+      
       timerRef.current = setInterval(() => {
         setPlaybackDuration(prev => {
           if (prev >= duration) {
@@ -413,28 +580,35 @@ const ChecklistScreen = () => {
         });
       }, 1000);
 
-      // Auto-stop after duration
-      autoStopRef.current = setTimeout(async () => {
+      autoStopRef.current = setTimeout(() => {
         setIsPlaying(false);
         if (timerRef.current) clearInterval(timerRef.current);
-        console.log('Auto-stopped question playback');
       }, duration * 1000);
-
-    } catch (error) {
-      console.error('Error playing track:', error);
     }
   };
 
   const handlePlayPause = async () => {
     try {
-      if (isPlaying) {
-        // Pause logic for web
-        if (timerRef.current) clearInterval(timerRef.current);
-        setIsPlaying(false);
+      if (audioRef.current) {
+        if (isPlaying) {
+          // Pause audio
+          audioRef.current.pause();
+          if (timerRef.current) clearInterval(timerRef.current);
+          setIsPlaying(false);
+        } else {
+          // Resume audio
+          await audioRef.current.play();
+          setIsPlaying(true);
+        }
       } else {
-        // Resume logic for web
-        setIsPlaying(true);
-        // Restart timer logic here
+        // Fallback to timer-based logic
+        if (isPlaying) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          setIsPlaying(false);
+        } else {
+          setIsPlaying(true);
+          // Restart timer logic here
+        }
       }
     } catch (error) {
       console.error('Error toggling playback:', error);
@@ -443,8 +617,14 @@ const ChecklistScreen = () => {
 
   const handleRestart = async () => {
     try {
-      setPlaybackDuration(0);
-      // Restart timer logic here
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        await audioRef.current.play();
+        setIsPlaying(true);
+      } else {
+        setPlaybackDuration(0);
+        // Restart timer logic here
+      }
     } catch (error) {
       console.error('Error restarting track:', error);
     }
@@ -454,19 +634,27 @@ const ChecklistScreen = () => {
     const newVolume = parseFloat(event.target.value);
     console.log('Volume changed to:', newVolume);
     setVolume(newVolume);
-    // Volume logic for web
+    
+    // Update audio volume if audio element exists
+    if (audioRef.current) {
+      audioRef.current.volume = newVolume;
+    }
   };
 
   const showAnswerFeedback = (status: 'correct' | 'incorrect' | 'skipped') => {
-    const messages = {
-      correct: 'Correct! 🎉',
-      incorrect: 'Incorrect! 😔',
-      skipped: 'Skipped! 🤷‍♂️'
-    };
+    let message = '';
+    
+    if (status === 'correct') {
+      message = 'Correct! 🎉';
+    } else if (status === 'incorrect') {
+      message = `Incorrect! 😔 The correct answer was: ${currentQuestion?.correctAnswer}`;
+    } else {
+      message = 'Skipped! 🤷‍♂️';
+    }
     
     setFeedback({
       show: true,
-      message: messages[status],
+      message: message,
       type: status
     });
     
@@ -474,7 +662,7 @@ const ChecklistScreen = () => {
       setFeedback({ show: false, message: '', type: 'correct' });
       // Move to next question after feedback
       handleNextQuestion();
-    }, 2000);
+    }, 3000); // Increased time to 3 seconds so users can read the correct answer
   };
 
   const handleAnswer = async (selectedAnswer: string) => {
@@ -486,6 +674,15 @@ const ChecklistScreen = () => {
       console.log('Early return - missing currentQuestion or dailyData');
       return;
     }
+
+    // Stop audio playback when answer is selected
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (autoStopRef.current) clearTimeout(autoStopRef.current);
+    setIsPlaying(false);
 
     const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
     const status: 'unanswered' | 'correct' | 'incorrect' | 'skipped' = selectedAnswer === 'idk' ? 'skipped' : (isCorrect ? 'correct' : 'incorrect');
@@ -539,6 +736,15 @@ const ChecklistScreen = () => {
 
   const handleSkip = async () => {
     if (!currentQuestion) return;
+
+    // Stop audio playback when skipping
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (autoStopRef.current) clearTimeout(autoStopRef.current);
+    setIsPlaying(false);
 
     // Update question
     const updatedQuestion = { ...currentQuestion, userAnswer: 'idk', status: 'skipped' as const };
@@ -736,6 +942,22 @@ const ChecklistScreen = () => {
             {loading ? 'Loading...' : 'Start Quiz'}
           </button>
         )}
+        
+        <button
+          onClick={clearCache}
+          style={{
+            padding: '8px 16px',
+            fontSize: 14,
+            background: 'transparent',
+            color: '#6B7280',
+            border: '1px solid #D1D5DB',
+            borderRadius: 6,
+            cursor: 'pointer',
+            marginTop: 8,
+          }}
+        >
+          🔄 Refresh Tracks (Clear Cache)
+        </button>
       </div>
     );
   };
@@ -880,7 +1102,7 @@ const ChecklistScreen = () => {
           </div>
           
           <div style={{ marginBottom: 16 }}>
-            <h3 style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 8 }}>Who is the artist?</h3>
+            <h3 style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 8 }}>What is the song title?</h3>
             <div style={{ display: 'grid', gap: 8 }}>
               {currentQuestion.options.map((option, index) => (
                 <button
