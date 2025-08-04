@@ -52,10 +52,33 @@ const ChecklistScreen = () => {
 
   // Function to save daily stats to backend
   const saveDailyStatsToBackend = async () => {
-    if (!user?.uid || !dailyData || dailyData.questionsAnswered === 0) return;
+    if (!user?.uid || !dailyData || dailyData.questionsAnswered === 0) {
+      console.log('Skipping save - missing required data:', {
+        hasUser: !!user?.uid,
+        hasDailyData: !!dailyData,
+        questionsAnswered: dailyData?.questionsAnswered
+      });
+      return;
+    }
     
     try {
-      await apiService.saveQuizState(user.uid, questions, currentQuestionIndex, {
+      // Clean the questions array to remove any circular references or large objects
+      const cleanQuestions = questions.map(q => ({
+        id: q.id,
+        track: {
+          trackId: q.track.trackId,
+          trackName: q.track.trackName,
+          artistName: q.track.artistName,
+          artworkUrl100: q.track.artworkUrl100,
+          previewUrl: q.track.previewUrl
+        },
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        userAnswer: q.userAnswer,
+        status: q.status
+      }));
+      
+      await apiService.saveQuizState(user.uid, cleanQuestions, currentQuestionIndex, {
         correct: dailyData.correct,
         incorrect: dailyData.incorrect,
         skipped: dailyData.skipped
@@ -63,6 +86,7 @@ const ChecklistScreen = () => {
       console.log('Daily stats saved to backend on navigation:', dailyData);
     } catch (error) {
       console.error('Error saving daily stats on navigation:', error);
+      // Don't throw the error to prevent the app from crashing
     }
   };
 

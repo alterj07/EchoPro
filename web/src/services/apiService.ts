@@ -90,14 +90,33 @@ class ApiService {
 
   async saveQuizState(userId: string, questions: any[], currentQuestionIndex: number, dailyStats?: any) {
     try {
+      // Ensure the data is serializable
+      const payload = {
+        questions: questions || [],
+        currentQuestionIndex: currentQuestionIndex || 0,
+        dailyStats: dailyStats || {}
+      };
+      
+      console.log('Saving quiz state with payload:', {
+        userId,
+        questionsCount: questions?.length || 0,
+        currentQuestionIndex,
+        dailyStats
+      });
+      
       const response = await this.makeRequest(`/users/${userId}/quiz-state`, {
         method: 'POST',
-        body: JSON.stringify({ questions, currentQuestionIndex, dailyStats }),
+        body: JSON.stringify(payload),
       });
       return response;
     } catch (error: any) {
       console.error('Error saving quiz state:', error);
-      throw error;
+      // Return a default response instead of throwing to prevent app crashes
+      return {
+        success: false,
+        message: 'Failed to save quiz state',
+        error: error.message
+      };
     }
   }
 

@@ -150,20 +150,27 @@ class MusicService {
         );
         const data = await response.json();
         if (data.results) {
-          allTracks.push(...data.results.map((track: any) => ({
-            trackId: track.trackId,
-            trackName: track.trackName,
-            artistName: track.artistName,
-            artworkUrl100: track.artworkUrl100,
-            previewUrl: track.previewUrl,
-            releaseDate: track.releaseDate,
-          })));
+          const tracksWithPreview = data.results
+            .filter((track: any) => track.previewUrl && track.previewUrl.trim() !== '')
+            .map((track: any) => ({
+              trackId: track.trackId,
+              trackName: track.trackName,
+              artistName: track.artistName,
+              artworkUrl100: track.artworkUrl100,
+              previewUrl: track.previewUrl,
+              releaseDate: track.releaseDate,
+            }));
+          allTracks.push(...tracksWithPreview);
+          console.log(`Loaded ${tracksWithPreview.length} tracks for ${decade}`);
         }
       } catch (error) {
         console.error(`Error fetching tracks for decade ${decade}:`, error);
       }
     }
-    return this.removeDuplicateTracks(allTracks);
+    
+    const uniqueTracks = this.removeDuplicateTracks(allTracks);
+    console.log(`Total unique tracks with preview URLs: ${uniqueTracks.length}`);
+    return uniqueTracks;
   }
 
   // Quiz title based on birthday
