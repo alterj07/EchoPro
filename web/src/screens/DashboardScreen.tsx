@@ -160,13 +160,43 @@ function DashboardScreen() {
     const grandTotal = totalCorrect + totalIncorrect + totalSkipped;
     const overallPercent = grandTotal > 0 ? (totalCorrect / grandTotal) * 100 : 0;
 
-    const processedHistory: ProcessedHistoryItem[] = filteredHistory.map(item => {
-      const totalAnswered = item.correct + item.incorrect;
+    let processedHistory: (ProcessedHistoryItem | DailySummaryItem)[];
+
+    if (selectedPeriod === 'day') {
+      // For day period, show only one activity entry with current day's totals
+      const today = new Date().toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+      
+      const totalAnswered = totalCorrect + totalIncorrect;
       const isActive = totalAnswered > 0;
-      const percent = isActive ? (item.correct / totalAnswered) * 100 : 0;
+      const percent = isActive ? (totalCorrect / totalAnswered) * 100 : 0;
       const color = isActive ? (percent >= 80 ? '#4CAF50' : percent >= 60 ? '#FFC107' : '#F44336') : '#ccc';
-      return { ...item, percent, color, isActive };
-    }).reverse();
+      
+      processedHistory = [{
+        day: today,
+        date: new Date().toISOString(),
+        correct: totalCorrect,
+        incorrect: totalIncorrect,
+        skipped: totalSkipped,
+        total: grandTotal,
+        percent,
+        color,
+        isActive
+      }];
+    } else {
+      // For other periods, show all history items as before
+      processedHistory = filteredHistory.map(item => {
+        const totalAnswered = item.correct + item.incorrect;
+        const isActive = totalAnswered > 0;
+        const percent = isActive ? (item.correct / totalAnswered) * 100 : 0;
+        const color = isActive ? (percent >= 80 ? '#4CAF50' : percent >= 60 ? '#FFC107' : '#F44336') : '#ccc';
+        return { ...item, percent, color, isActive };
+      }).reverse();
+    }
 
     return { totalQuizzes, totalCorrect, totalIncorrect, totalSkipped, overallPercent, history: processedHistory };
   };
