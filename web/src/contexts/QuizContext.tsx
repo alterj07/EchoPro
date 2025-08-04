@@ -96,7 +96,7 @@ export const QuizProvider = ({ children }: { children: ReactNode }) => {
         // Find today's progress (progress[0] should be daily)
         const todayProgress = userData.progress.find((p: any) => p.period === 'daily');
         if (todayProgress && todayProgress.stats) {
-          const { correctAnswers, incorrectAnswers, skippedAnswers, totalQuestions } = todayProgress.stats;
+          const { correctAnswers, incorrectAnswers, skippedAnswers } = todayProgress.stats;
           const total = correctAnswers + incorrectAnswers + skippedAnswers;
           const percent = total > 0 ? (correctAnswers / total) * 100 : 0;
           

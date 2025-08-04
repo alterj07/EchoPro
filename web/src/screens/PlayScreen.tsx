@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../contexts/AuthContext';
 import musicService, { type ITunesTrack } from '../services/musicService';
 
 function PlayScreen() {
@@ -16,7 +15,7 @@ function PlayScreen() {
   const autoStopRef = useRef<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   
-  const { user } = useAuth();
+
 
   // Load tracks when component mounts
   useEffect(() => {

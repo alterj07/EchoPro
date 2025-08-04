@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQuiz } from '../contexts/QuizContext';
@@ -35,8 +35,6 @@ const ChecklistScreen = () => {
   
   // Audio playback state for web
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackDuration, setPlaybackDuration] = useState(0);
-  const [maxPlaybackTime, setMaxPlaybackTime] = useState(30);
   const [volume, setVolume] = useState(0.5);
   const timerRef = useRef<number | null>(null);
   const autoStopRef = useRef<number | null>(null);
@@ -47,7 +45,7 @@ const ChecklistScreen = () => {
 
   const { user } = useAuth();
   const { updateTodayProgress } = useAuth();
-  const { setQuizState, updateQuizProgress, quizState } = useQuiz();
+  const { setQuizState } = useQuiz();
   const { updateProgress } = useUserProgress();
 
   // Function to save daily stats to backend
@@ -512,7 +510,6 @@ const ChecklistScreen = () => {
         audioRef.current = null;
       }
       setIsPlaying(false);
-      setPlaybackDuration(0);
 
       // Create new audio element
       console.log('Loading audio from URL:', currentQuestion.track.previewUrl);
@@ -532,11 +529,10 @@ const ChecklistScreen = () => {
       // Set up audio event listeners
       audio.addEventListener('loadedmetadata', () => {
         console.log('Audio loaded, duration:', audio.duration);
-        setMaxPlaybackTime(Math.min(audio.duration, 30)); // Cap at 30 seconds
       });
 
       audio.addEventListener('timeupdate', () => {
-        setPlaybackDuration(Math.floor(audio.currentTime));
+        // Track time but don't store it since we're not displaying it
       });
 
       audio.addEventListener('ended', () => {
@@ -550,19 +546,14 @@ const ChecklistScreen = () => {
         setIsPlaying(false);
         // Fallback to timer-based simulation if audio fails
         const duration = Math.floor(Math.random() * 21) + 10;
-        setMaxPlaybackTime(duration);
-        setPlaybackDuration(0);
         
         timerRef.current = setInterval(() => {
-          setPlaybackDuration(prev => {
-            if (prev >= duration) {
-              if (timerRef.current) clearInterval(timerRef.current);
-              setIsPlaying(false);
-              return prev;
-            }
-            return prev + 1;
-          });
-        }, 1000);
+          // Simulate playback progress
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            setIsPlaying(false);
+          }
+        }, duration * 1000);
 
         autoStopRef.current = setTimeout(() => {
           setIsPlaying(false);
@@ -589,20 +580,15 @@ const ChecklistScreen = () => {
       console.error('Error playing track:', error);
       // Fallback to timer-based simulation
       const duration = Math.floor(Math.random() * 21) + 10;
-      setMaxPlaybackTime(duration);
-      setPlaybackDuration(0);
       setIsPlaying(true);
       
       timerRef.current = setInterval(() => {
-        setPlaybackDuration(prev => {
-          if (prev >= duration) {
-            if (timerRef.current) clearInterval(timerRef.current);
-            setIsPlaying(false);
-            return prev;
-          }
-          return prev + 1;
-        });
-      }, 1000);
+        // Simulate playback progress
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          setIsPlaying(false);
+        }
+      }, duration * 1000);
 
       autoStopRef.current = setTimeout(() => {
         setIsPlaying(false);
@@ -646,7 +632,7 @@ const ChecklistScreen = () => {
         await audioRef.current.play();
         setIsPlaying(true);
       } else {
-        setPlaybackDuration(0);
+
         // Restart timer logic here
       }
     } catch (error) {

@@ -2,7 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { UserProgressProvider } from './contexts/UserProgressContext';
-import { QuizProvider, useQuiz } from './contexts/QuizContext';
+import { QuizProvider } from './contexts/QuizContext';
 import { FontSizeProvider } from './contexts/fontSizeContext';
 
 // Import screens
