@@ -24,7 +24,8 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
         justifyContent: 'center', 
         alignItems: 'center', 
         height: '100vh',
-        fontSize: 18,
+        width: '100vw',
+        fontSize: 'clamp(16px, 2vw, 18px)',
         color: '#666'
       }}>
         Loading...
@@ -62,9 +63,13 @@ const Navigation: React.FC = () => {
   return (
     <nav style={{
       background: '#fff',
-      padding: '16px 20px',
+      padding: 'clamp(12px, 2vw, 20px)',
       boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-      marginBottom: 20
+      marginBottom: 'clamp(10px, 2vw, 20px)',
+      position: 'sticky',
+      top: 0,
+      zIndex: 1000,
+      width: '100%'
     }}>
       <div style={{
         width: '100%',
@@ -73,68 +78,98 @@ const Navigation: React.FC = () => {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '0 24px'
+        padding: '0 clamp(12px, 3vw, 24px)',
+        flexWrap: 'wrap',
+        gap: 'clamp(8px, 1vw, 12px)'
       }}>
-        <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+        <div style={{ 
+          display: 'flex', 
+          gap: 'clamp(12px, 2vw, 20px)', 
+          alignItems: 'center',
+          flexWrap: 'wrap'
+        }}>
           <Link to="/dashboard" style={{
-            fontSize: 20,
+            fontSize: 'clamp(18px, 3vw, 20px)',
             fontWeight: 'bold',
             color: '#2563EB',
-            textDecoration: 'none'
+            textDecoration: 'none',
+            whiteSpace: 'nowrap'
           }}>
             EchoPro
           </Link>
           <Link to="/dashboard" style={{
             color: '#666',
             textDecoration: 'none',
-            padding: '8px 12px',
+            padding: 'clamp(6px, 1.5vw, 12px)',
             borderRadius: 6,
-            transition: 'background 0.2s'
+            transition: 'background 0.2s',
+            fontSize: 'clamp(12px, 1.5vw, 14px)',
+            whiteSpace: 'nowrap'
           }} onMouseOver={(e) => e.currentTarget.style.background = '#f3f4f6'}>
             Dashboard
           </Link>
           <Link to="/quiz" style={{
             color: '#666',
             textDecoration: 'none',
-            padding: '8px 12px',
+            padding: 'clamp(6px, 1.5vw, 12px)',
             borderRadius: 6,
-            transition: 'background 0.2s'
+            transition: 'background 0.2s',
+            fontSize: 'clamp(12px, 1.5vw, 14px)',
+            whiteSpace: 'nowrap'
           }} onMouseOver={(e) => e.currentTarget.style.background = '#f3f4f6'}>
             Quiz
           </Link>
           <Link to="/play" style={{
             color: '#666',
             textDecoration: 'none',
-            padding: '8px 12px',
+            padding: 'clamp(6px, 1.5vw, 12px)',
             borderRadius: 6,
-            transition: 'background 0.2s'
+            transition: 'background 0.2s',
+            fontSize: 'clamp(12px, 1.5vw, 14px)',
+            whiteSpace: 'nowrap'
           }} onMouseOver={(e) => e.currentTarget.style.background = '#f3f4f6'}>
             Videos
           </Link>
         </div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <span style={{ color: '#666', fontSize: 14 }}>
+        <div style={{ 
+          display: 'flex', 
+          gap: 'clamp(8px, 1.5vw, 12px)', 
+          alignItems: 'center',
+          flexWrap: 'wrap'
+        }}>
+          <span style={{ 
+            color: '#666', 
+            fontSize: 'clamp(11px, 1.2vw, 14px)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            maxWidth: 'clamp(120px, 15vw, 200px)'
+          }}>
             {user.email}
           </span>
           <Link to="/settings" style={{
             color: '#666',
             textDecoration: 'none',
-            padding: '8px 12px',
+            padding: 'clamp(6px, 1.5vw, 12px)',
             borderRadius: 6,
-            transition: 'background 0.2s'
+            transition: 'background 0.2s',
+            fontSize: 'clamp(11px, 1.2vw, 14px)',
+            whiteSpace: 'nowrap'
           }} onMouseOver={(e) => e.currentTarget.style.background = '#f3f4f6'}>
             Settings
           </Link>
           <button
             onClick={handleSignOut}
             style={{
-              padding: '8px 16px',
+              padding: 'clamp(6px, 1.5vw, 16px) clamp(8px, 2vw, 16px)',
               background: '#DC2626',
               color: '#fff',
               border: 'none',
               borderRadius: 6,
               cursor: 'pointer',
-              fontSize: 14
+              fontSize: 'clamp(11px, 1.2vw, 14px)',
+              whiteSpace: 'nowrap',
+              minWidth: 'fit-content'
             }}
           >
             Sign Out
@@ -149,39 +184,54 @@ const Navigation: React.FC = () => {
 const AppContent: React.FC = () => {
   return (
     <Router>
-      <div style={{ width: '100%', height: '100vh', background: '#F8FAFC' }}>
+      <div style={{ 
+        width: '100vw', 
+        height: '100vh', 
+        background: '#F8FAFC',
+        overflow: 'auto',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
         <Navigation />
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/login" element={<LoginScreen />} />
-          <Route path="/signup" element={<SignupScreen />} />
-          
-          {/* Protected Routes */}
-          <Route path="/dashboard" element={
-            <ProtectedRoute>
-              <DashboardScreen />
-            </ProtectedRoute>
-          } />
-          <Route path="/quiz" element={
-            <ProtectedRoute>
-              <ChecklistScreen />
-            </ProtectedRoute>
-          } />
-          <Route path="/play" element={
-            <ProtectedRoute>
-              <PlayScreen />
-            </ProtectedRoute>
-          } />
-          <Route path="/settings" element={
-            <ProtectedRoute>
-              <SettingsScreen />
-            </ProtectedRoute>
-          } />
-          
-          {/* Default redirects */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
+        <div style={{
+          flex: 1,
+          width: '100%',
+          overflow: 'auto',
+          padding: 'clamp(10px, 2vw, 20px)',
+          boxSizing: 'border-box'
+        }}>
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/login" element={<LoginScreen />} />
+            <Route path="/signup" element={<SignupScreen />} />
+            
+            {/* Protected Routes */}
+            <Route path="/dashboard" element={
+              <ProtectedRoute>
+                <DashboardScreen />
+              </ProtectedRoute>
+            } />
+            <Route path="/quiz" element={
+              <ProtectedRoute>
+                <ChecklistScreen />
+              </ProtectedRoute>
+            } />
+            <Route path="/play" element={
+              <ProtectedRoute>
+                <PlayScreen />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings" element={
+              <ProtectedRoute>
+                <SettingsScreen />
+              </ProtectedRoute>
+            } />
+            
+            {/* Default redirects */}
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </div>
       </div>
     </Router>
   );

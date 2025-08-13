@@ -36,30 +36,7 @@ const progressSchema = new mongoose.Schema({
       type: Number,
       default: 0
     },
-    averageScore: {
-      type: Number,
-      default: 0
-    },
-    bestScore: {
-      type: Number,
-      default: 0
-    },
-    worstScore: {
-      type: Number,
-      default: 0
-    },
-    streakDays: {
-      type: Number,
-      default: 0
-    },
-    currentStreak: {
-      type: Number,
-      default: 0
-    },
-    longestStreak: {
-      type: Number,
-      default: 0
-    }
+   
   },
   // Active quiz state for resuming quizzes
   quizQuestions: {
@@ -86,40 +63,7 @@ const progressSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  history: [{
-    date: {
-      type: Date,
-      required: true
-    },
-    quizId: {
-      type: String,
-      required: true
-    },
-    questionsAnswered: {
-      type: Number,
-      default: 0
-    },
-    correct: {
-      type: Number,
-      default: 0
-    },
-    incorrect: {
-      type: Number,
-      default: 0
-    },
-    skipped: {
-      type: Number,
-      default: 0
-    },
-    score: {
-      type: Number,
-      default: 0
-    },
-    timeSpent: {
-      type: Number, // in seconds
-      default: 0
-    }
-  }],
+ 
   lastUpdated: {
     type: Date,
     default: Date.now
@@ -199,88 +143,8 @@ const userSchema = new mongoose.Schema({
       default: Date.now
     }
   },
-  achievements: [{
-    id: {
-      type: String,
-      required: true
-    },
-    name: {
-      type: String,
-      required: true
-    },
-    description: {
-      type: String,
-      required: true
-    },
-    icon: {
-      type: String,
-      required: true
-    },
-    unlockedAt: {
-      type: Date,
-      default: Date.now
-    },
-    progress: {
-      type: Number,
-      default: 0
-    },
-    maxProgress: {
-      type: Number,
-      default: 1
-    }
-  }],
   progress: [progressSchema],
-  stats: {
-    // Overall lifetime stats
-    totalQuizzesTaken: {
-      type: Number,
-      default: 0
-    },
-    totalQuestionsAnswered: {
-      type: Number,
-      default: 0
-    },
-    totalCorrectAnswers: {
-      type: Number,
-      default: 0
-    },
-    totalIncorrectAnswers: {
-      type: Number,
-      default: 0
-    },
-    totalSkippedAnswers: {
-      type: Number,
-      default: 0
-    },
-    overallAccuracy: {
-      type: Number,
-      default: 0
-    },
-    averageQuizScore: {
-      type: Number,
-      default: 0
-    },
-    bestQuizScore: {
-      type: Number,
-      default: 0
-    },
-    totalTimeSpent: {
-      type: Number, // in seconds
-      default: 0
-    },
-    currentStreak: {
-      type: Number,
-      default: 0
-    },
-    longestStreak: {
-      type: Number,
-      default: 0
-    },
-    lastQuizDate: {
-      type: Date,
-      default: null
-    }
-  },
+  
   createdAt: {
     type: Date,
     default: Date.now
@@ -289,14 +153,159 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes for efficient queries
-userSchema.index({ 'stats.lastQuizDate': -1 });
-userSchema.index({ 'stats.overallAccuracy': -1 });
-userSchema.index({ 'stats.currentStreak': -1 });
+
+// Method to ensure all progress periods exist
+userSchema.methods.ensureAllProgressPeriods = function(now) {
+  // Ensure daily progress exists
+  let dailyProgress = this.progress.find(p => p.period === 'daily');
+  if (!dailyProgress) {
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    
+    dailyProgress = {
+      period: 'daily',
+      startDate: dayStart,
+      endDate: dayEnd,
+      stats: {
+        totalQuizzes: 0,
+        totalQuestions: 0,
+        correctAnswers: 0,
+        incorrectAnswers: 0,
+        skippedAnswers: 0,
+        averageScore: 0,
+        bestScore: 0,
+        worstScore: 0,
+        streakDays: 0,
+        currentStreak: 0,
+        longestStreak: 0
+      },
+      quizQuestions: [],
+      currentQuestionIndex: 0,
+      history: [],
+      lastUpdated: now
+    };
+    this.progress.push(dailyProgress);
+  }
+
+  // Ensure weekly progress exists
+  let weeklyProgress = this.progress.find(p => p.period === 'weekly');
+  if (!weeklyProgress) {
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1));
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59);
+    
+    weeklyProgress = {
+      period: 'weekly',
+      startDate: weekStart,
+      endDate: weekEnd,
+      stats: {
+        totalQuizzes: 0,
+        totalQuestions: 0,
+        correctAnswers: 0,
+        incorrectAnswers: 0,
+        skippedAnswers: 0,
+        averageScore: 0,
+        bestScore: 0,
+        worstScore: 0,
+        streakDays: 0,
+        currentStreak: 0,
+        longestStreak: 0
+      },
+      history: []
+    };
+    this.progress.push(weeklyProgress);
+  }
+
+  // Ensure monthly progress exists
+  let monthlyProgress = this.progress.find(p => p.period === 'monthly');
+  if (!monthlyProgress) {
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    
+    monthlyProgress = {
+      period: 'monthly',
+      startDate: monthStart,
+      endDate: monthEnd,
+      stats: {
+        totalQuizzes: 0,
+        totalQuestions: 0,
+        correctAnswers: 0,
+        incorrectAnswers: 0,
+        skippedAnswers: 0,
+        averageScore: 0,
+        bestScore: 0,
+        worstScore: 0,
+        streakDays: 0,
+        currentStreak: 0,
+        longestStreak: 0
+      },
+      history: []
+    };
+    this.progress.push(monthlyProgress);
+  }
+
+  // Ensure yearly progress exists
+  let yearlyProgress = this.progress.find(p => p.period === 'yearly');
+  if (!yearlyProgress) {
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+    const yearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+    
+    yearlyProgress = {
+      period: 'yearly',
+      startDate: yearStart,
+      endDate: yearEnd,
+      stats: {
+        totalQuizzes: 0,
+        totalQuestions: 0,
+        correctAnswers: 0,
+        incorrectAnswers: 0,
+        skippedAnswers: 0,
+        averageScore: 0,
+        bestScore: 0,
+        worstScore: 0,
+        streakDays: 0,
+        currentStreak: 0,
+        longestStreak: 0
+      },
+      history: []
+    };
+    this.progress.push(yearlyProgress);
+  }
+
+  // Ensure all-time progress exists
+  let allTimeProgress = this.progress.find(p => p.period === 'all-time');
+  if (!allTimeProgress) {
+    allTimeProgress = {
+      period: 'all-time',
+      startDate: new Date(0),
+      endDate: new Date(8640000000000000),
+      stats: {
+        totalQuizzes: 0,
+        totalQuestions: 0,
+        correctAnswers: 0,
+        incorrectAnswers: 0,
+        skippedAnswers: 0,
+        averageScore: 0,
+        bestScore: 0,
+        worstScore: 0,
+        streakDays: 0,
+        currentStreak: 0,
+        longestStreak: 0
+      },
+      history: []
+    };
+    this.progress.push(allTimeProgress);
+  }
+};
 
 // Method to roll up stats when periods pass
 userSchema.methods.rollupStats = async function() {
   const now = new Date();
+  
+  // Ensure all progress periods exist
+  this.ensureAllProgressPeriods(now);
   
   // Check if daily period has passed and roll up to weekly
   const dailyProgress = this.progress.find(p => p.period === 'daily');
@@ -347,7 +356,12 @@ userSchema.methods.rollupStats = async function() {
     }
     
     // Add daily history to weekly
-    weeklyProgress.history.push(...dailyProgress.history);
+    if (!weeklyProgress.history) {
+      weeklyProgress.history = [];
+    }
+    if (dailyProgress.history && dailyProgress.history.length > 0) {
+      weeklyProgress.history.push(...dailyProgress.history);
+    }
     
     // Reset daily progress for new day
     const newDayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -419,7 +433,12 @@ userSchema.methods.rollupStats = async function() {
     }
     
     // Add weekly history to monthly
-    monthlyProgress.history.push(...weeklyProgress.history);
+    if (!monthlyProgress.history) {
+      monthlyProgress.history = [];
+    }
+    if (weeklyProgress.history && weeklyProgress.history.length > 0) {
+      monthlyProgress.history.push(...weeklyProgress.history);
+    }
     
     // Reset weekly progress for new week
     const newWeekStart = new Date(now);
@@ -492,7 +511,12 @@ userSchema.methods.rollupStats = async function() {
     }
     
     // Add monthly history to yearly
-    yearlyProgress.history.push(...monthlyProgress.history);
+    if (!yearlyProgress.history) {
+      yearlyProgress.history = [];
+    }
+    if (monthlyProgress.history && monthlyProgress.history.length > 0) {
+      yearlyProgress.history.push(...monthlyProgress.history);
+    }
     
     // Reset monthly progress for new month
     const newMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -559,7 +583,12 @@ userSchema.methods.rollupStats = async function() {
     }
     
     // Add yearly history to all-time
-    allTimeProgress.history.push(...yearlyProgress.history);
+    if (!allTimeProgress.history) {
+      allTimeProgress.history = [];
+    }
+    if (yearlyProgress.history && yearlyProgress.history.length > 0) {
+      allTimeProgress.history.push(...yearlyProgress.history);
+    }
     
     // Reset yearly progress for new year
     const newYearStart = new Date(now.getFullYear(), 0, 1);
@@ -583,7 +612,28 @@ userSchema.methods.rollupStats = async function() {
     yearlyProgress.history = [];
   }
   
-  await this.save();
+  // Save with retry logic for version conflicts
+  let retries = 0;
+  const maxRetries = 3;
+  
+  while (retries < maxRetries) {
+    try {
+      await this.save();
+      break; // Success, exit retry loop
+    } catch (error) {
+      if (error.name === 'VersionError' && retries < maxRetries - 1) {
+        console.log(`Version conflict on rollupStats for user ${this.userId}, retrying... (${retries + 1}/${maxRetries})`);
+        retries++;
+        // Reload the document to get the latest version
+        await this.reload();
+        // Wait a bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 50));
+      } else {
+        console.error('Error in rollupStats save:', error);
+        throw error;
+      }
+    }
+  }
 };
 
 // Method to update progress for a specific period
@@ -667,6 +717,9 @@ userSchema.methods.updateProgress = async function(period, quizData) {
   }
 
   // Add to history
+  if (!progress.history) {
+    progress.history = [];
+  }
   progress.history.push({
     date: now,
     quizId: quizData.quizId || `quiz_${Date.now()}`,
@@ -702,7 +755,29 @@ userSchema.methods.updateProgress = async function(period, quizData) {
   this.stats.lastQuizDate = now;
   this.profile.lastActive = now;
 
-  await this.save();
+  // Save with retry logic for version conflicts
+  let retries = 0;
+  const maxRetries = 3;
+  
+  while (retries < maxRetries) {
+    try {
+      await this.save();
+      break; // Success, exit retry loop
+    } catch (error) {
+      if (error.name === 'VersionError' && retries < maxRetries - 1) {
+        console.log(`Version conflict on updateProgress for user ${this.userId}, retrying... (${retries + 1}/${maxRetries})`);
+        retries++;
+        // Reload the document to get the latest version
+        await this.reload();
+        // Wait a bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 50));
+      } else {
+        console.error('Error in updateProgress save:', error);
+        throw error;
+      }
+    }
+  }
+  
   return progress;
 };
 

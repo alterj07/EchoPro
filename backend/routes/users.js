@@ -57,6 +57,10 @@ router.post('/create', async (req, res) => {
           lastQuizDate: null
         }
       });
+      
+      // Ensure all progress periods exist for new user
+      user.ensureAllProgressPeriods(new Date());
+      
       await user.save();
       console.log('New user created:', userId);
     } else {
@@ -202,6 +206,9 @@ router.delete('/:userId/progress', async (req, res) => {
       longestStreak: 0,
       lastQuizDate: null
     };
+    
+    // Ensure all progress periods exist after clearing
+    user.ensureAllProgressPeriods(new Date());
     
     await user.save();
     
@@ -466,8 +473,12 @@ router.post('/:userId/quiz-state', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
+    // Roll up stats if periods have passed (this will reset daily progress if it's a new day)
+    await user.rollupStats();
+    
     // Find or create daily progress
     let dailyProgress = user.progress.find(p => p.period === 'daily');
+    
     if (!dailyProgress) {
       dailyProgress = {
         period: 'daily',
@@ -511,39 +522,58 @@ router.post('/:userId/quiz-state', async (req, res) => {
         const score = totalQuestions > 0 ? ((dailyStats.correct || 0) / totalQuestions) * 100 : 0;
         
         // Check if we already have a recent entry with the same stats to prevent duplicates
-        const recentEntry = dailyProgress.history.find(entry => {
-          const timeDiff = Math.abs(new Date(entry.date).getTime() - Date.now());
-          return timeDiff < 5000 && // Within 5 seconds
-                 entry.correct === (dailyStats.correct || 0) &&
-                 entry.incorrect === (dailyStats.incorrect || 0) &&
-                 entry.skipped === (dailyStats.skipped || 0);
-        });
         
-        if (!recentEntry) {
-          const historyEntry = {
-            date: new Date(),
-            quizId: `quiz_${Date.now()}`,
-            questionsAnswered: totalQuestions,
-            correct: dailyStats.correct || 0,
-            incorrect: dailyStats.incorrect || 0,
-            skipped: dailyStats.skipped || 0,
-            score: score,
-            timeSpent: 0
-          };
-          
-          dailyProgress.history.push(historyEntry);
-          console.log('Added new history entry:', historyEntry);
-        } else {
-          console.log('Skipped duplicate history entry - recent entry found:', recentEntry);
-        }
       }
     }
-    console.log('dailyProgress', dailyProgress);
     
     dailyProgress.lastUpdated = new Date();
     user.profile.lastActive = new Date();
     
-    await user.save();
+    // Save with retry logic for version conflicts
+    let retries = 0;
+    const maxRetries = 3;
+    
+    while (retries < maxRetries) {
+      try {
+        await user.save();
+        break; // Success, exit retry loop
+      } catch (error) {
+        if (error.name === 'VersionError' && retries < maxRetries - 1) {
+          console.log(`Version conflict on quiz-state save for user ${userId}, retrying... (${retries + 1}/${maxRetries})`);
+          retries++;
+          // Reload the document to get the latest version
+          const freshUser = await User.findOne({ userId });
+          if (!freshUser) {
+            return res.status(404).json({ error: 'User not found after reload' });
+          }
+          // Update the user reference and dailyProgress reference
+          user.set(freshUser.toObject());
+          dailyProgress = user.progress.find(p => p.period === 'daily');
+          if (!dailyProgress) {
+            dailyProgress = {
+              period: 'daily',
+              startDate: new Date(new Date().setHours(0, 0, 0, 0)),
+              endDate: new Date(new Date().setHours(23, 59, 59, 999)),
+              stats: { totalQuizzes: 0, totalQuestions: 0, correctAnswers: 0, incorrectAnswers: 0, skippedAnswers: 0, averageScore: 0, bestScore: 0, worstScore: 0, streakDays: 0, currentStreak: 0, longestStreak: 0 },
+              quizQuestions: [],
+              currentQuestionIndex: 0,
+              history: [],
+              lastUpdated: new Date()
+            };
+            user.progress.push(dailyProgress);
+          }
+          // Reapply the changes
+          dailyProgress.quizQuestions = questions;
+          dailyProgress.currentQuestionIndex = currentQuestionIndex;
+          dailyProgress.lastUpdated = new Date();
+          user.profile.lastActive = new Date();
+          // Wait a bit before retrying
+          await new Promise(resolve => setTimeout(resolve, 50));
+        } else {
+          throw error;
+        }
+      }
+    }
     
     res.json({ 
       success: true, 

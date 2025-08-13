@@ -54,7 +54,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try {
           const progress = JSON.parse(storedProgress);
           setTodayProgress(progress);
-          console.log('AuthContext - Loaded today progress from localStorage:', progress);
         } catch (error) {
           console.error('Error loading today progress from localStorage:', error);
         }
@@ -76,14 +75,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       percent
     };
     
-    console.log('AuthContext - Updating today progress:', newProgress);
+    
     setTodayProgress(newProgress);
     
     // Save to localStorage if user is logged in
     if (user?.uid) {
       try {
         localStorage.setItem(`todayProgress_${user.uid}`, JSON.stringify(newProgress));
-        console.log('AuthContext - Saved today progress to localStorage');
+        
       } catch (error) {
         console.error('Error saving today progress to localStorage:', error);
       }
@@ -109,13 +108,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             percent: percent
           };
           
-          console.log('AuthContext - Loaded today progress from backend:', progress);
+          
           setTodayProgress(progress);
           
           // Save to localStorage
           try {
             localStorage.setItem(`todayProgress_${userId}`, JSON.stringify(progress));
-            console.log('AuthContext - Saved today progress to localStorage from backend');
+            
           } catch (error) {
             console.error('Error saving today progress to localStorage:', error);
           }
@@ -129,15 +128,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Save today's progress to backend
   const saveTodayProgressToBackend = useCallback(async (userId: string) => {
     try {
-      console.log('AuthContext - saveTodayProgressToBackend called with userId:', userId);
-      console.log('AuthContext - Current todayProgress:', todayProgress);
+      
       
       await apiService.saveQuizState(userId, [], 0, {
         correct: todayProgress.correct,
         incorrect: todayProgress.incorrect,
         skipped: todayProgress.skipped
       });
-      console.log('AuthContext - Saved today progress to backend:', todayProgress);
+      
     } catch (error) {
       console.error('Error saving today progress to backend:', error);
     }
@@ -148,7 +146,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       // Validate credentials against MongoDB database
       const validationResponse = await apiService.validateLogin(email, password);
-      console.log('Login successful:', validationResponse);
+      
       
       // Create a mock user object from the MongoDB user data
       const mongoUser = validationResponse.user;
@@ -162,7 +160,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try {
           const key = `quizState_${user.uid}`;
           localStorage.removeItem(key);
-          console.log('Cleared quiz state for previous user:', user.uid);
+          
         } catch (error) {
           console.error('Error clearing previous user quiz state:', error);
         }
@@ -194,12 +192,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       const response = await apiService.createUser(userId, name, email, password); // Pass actual name
-      console.log('User created in MongoDB:', response);
+      
       
       // Clear any existing progress data for the new user to ensure fresh start
       try {
         await apiService.clearUserProgress(userId);
-        console.log('Cleared progress data for new user:', userId);
+        
       } catch (error) {
         console.error('Error clearing progress for new user:', error);
       }
@@ -219,7 +217,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try {
           const key = `quizState_${user.uid}`;
           localStorage.removeItem(key);
-          console.log('Cleared quiz state for previous user:', user.uid);
+          
         } catch (error) {
           console.error('Error clearing previous user quiz state:', error);
         }
@@ -229,7 +227,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         const newUserKey = `quizState_${mockUser.uid}`;
         localStorage.removeItem(newUserKey);
-        console.log('Cleared any existing quiz state for new user:', mockUser.uid);
+        
       } catch (error) {
         console.error('Error clearing new user quiz state:', error);
       }
