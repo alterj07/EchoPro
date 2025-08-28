@@ -11,12 +11,12 @@ Your Vercel frontend is trying to call `localhost:3000` which causes CORS errors
 3. Go to **Settings** → **Environment Variables**
 4. Add new variable:
    - **Name**: `VITE_API_URL`
-   - **Value**: `https://your-backend-url.railway.app/api` (after deploying backend)
+   - **Value**: `https://your-backend-url.render.com/api` (your Render backend URL)
 5. **Redeploy** your frontend
 
 ---
 
-## 🎯 Backend Deployment to Railway
+## 🎯 Backend Deployment to Render
 
 ### **Step 1: Prepare Backend**
 ```bash
@@ -24,16 +24,18 @@ cd backend
 npm install
 ```
 
-### **Step 2: Deploy to Railway**
-1. Go to [Railway.app](https://railway.app)
+### **Step 2: Deploy to Render**
+1. Go to [Render Dashboard](https://dashboard.render.com)
 2. Sign in with GitHub
-3. Click **New Project** → **Deploy from GitHub repo**
-4. Select your `EchoPro` repository
+3. Click **New** → **Web Service**
+4. Connect your `EchoPro` repository
 5. Set **Root Directory** to `backend`
-6. Click **Deploy**
+6. Set **Build Command**: `npm install`
+7. Set **Start Command**: `npm start`
+8. Click **Create Web Service**
 
-### **Step 3: Configure Environment Variables in Railway**
-1. In your Railway project, go to **Variables**
+### **Step 3: Configure Environment Variables in Render**
+1. In your Render web service, go to **Environment** tab
 2. Add these environment variables:
    ```
    MONGODB_URI=your_mongodb_atlas_connection_string
@@ -42,8 +44,8 @@ npm install
    ```
 
 ### **Step 4: Get Your Backend URL**
-1. Railway will give you a URL like: `https://your-app-name.railway.app`
-2. Your API base URL will be: `https://your-app-name.railway.app/api`
+1. Render will give you a URL like: `https://your-app-name.onrender.com`
+2. Your API base URL will be: `https://your-app-name.onrender.com/api`
 
 ---
 
@@ -51,7 +53,7 @@ npm install
 
 ### **Update Vercel Environment Variable:**
 - **Name**: `VITE_API_URL`
-- **Value**: `https://your-app-name.railway.app/api`
+- **Value**: `https://your-app-name.onrender.com/api`
 
 ### **Redeploy Frontend:**
 1. In Vercel, go to **Deployments**
