@@ -19,7 +19,9 @@ A Node.js backend for the EchoPro React Native app that handles dashboard data a
 
 2. **Set up MongoDB:**
    - Install MongoDB locally or use MongoDB Atlas
-   - Update `MONGODB_URI` in your environment variables
+   - Create a `.env` file in the backend directory
+   - Add your MongoDB connection string: `MONGODB_URI=your_connection_string_here`
+   - **Never commit your `.env` file to version control**
 
 3. **Environment variables:**
    Create a `.env` file based on `config.env`:
