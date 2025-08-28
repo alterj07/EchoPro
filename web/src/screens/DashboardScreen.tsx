@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useUserProgress } from '../contexts/UserProgressContext';
 import apiService from '../services/apiService';
 
 type Period = 'day' | 'week' | 'month' | 'year' | 'all';
@@ -31,203 +30,94 @@ type DailySummaryItem = {
   isActive: boolean;
 }
 
-type PerformanceData = {
-  totalQuizzes: number;
-  totalCorrect: number;
-  totalIncorrect: number;
-  totalSkipped: number;
-  overallPercent: number;
-  history: (ProcessedHistoryItem | DailySummaryItem)[];
-};
+type PerformanceData = any[];
 
 function DashboardScreen() {
   const [period, setPeriod] = useState<Period>('week');
   const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null);
+  const [todayData, setTodayData] = useState<any>(null); // Today's progress from backend
   const [loading, setLoading] = useState(true);
-  const { todayProgress } = useAuth();
-  const { userProgress, loading: progressLoading } = useUserProgress();
   const { user } = useAuth();
 
-  // Calculate live progress values from AuthContext data
-  const liveCorrect = todayProgress.correct;
-  const liveIncorrect = todayProgress.incorrect;
-  const liveSkipped = todayProgress.skipped;
-  const liveTotal = todayProgress.total;
-  const livePercent = todayProgress.percent;
+  // Calculate live progress values from backend daily progress data
+  const liveCorrect = todayData?.correctAnswers || 0;
+  const liveIncorrect = todayData?.incorrectAnswers || 0;
+  const liveSkipped = todayData?.skippedAnswers || 0;
+  const liveTotal = liveCorrect + liveIncorrect + liveSkipped;
+  const livePercent = liveTotal > 0 ? (liveCorrect / liveTotal) * 100 : 0;
   const livePerformanceColor = liveTotal > 0 ? (livePercent >= 80 ? '#4CAF50' : livePercent >= 60 ? '#FFC107' : '#F44336') : '#ccc';
 
-  // Debug logging
-  console.log('Dashboard - Today Progress from AuthContext:', todayProgress);
-  console.log('Dashboard - Live Stats:', { liveCorrect, liveIncorrect, liveSkipped, liveTotal, livePercent });
+  // Get the correct index based on selected period
+  const getPeriodIndex = (selectedPeriod: Period): number => {
+    const periodMap: Record<Period, number> = {
+      'day': 0,      // daily
+      'week': 1,     // weekly  
+      'month': 2,    // monthly
+      'year': 3,     // yearly
+      'all': 4       // all-time
+    };
+    return periodMap[selectedPeriod] || 0;
+  };
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
     try {
       if (user?.uid) {
-        console.log('Dashboard - Loading history for user:', user.uid, 'period:', period);
-        const dashboardData = await apiService.getDashboardData(user.uid, period);
-        console.log('Dashboard - Dashboard data received:', dashboardData);
+        const dashboardData = await apiService.getDashboardData(user.uid);
         
-        if (dashboardData && dashboardData.history) {
-          console.log('Dashboard - History found:', dashboardData.history);
-          // Convert backend data format to our format
-          const history: QuizResult[] = dashboardData.history.map((item: any) => ({
-            date: item.date || new Date().toISOString(),
-            correct: item.correct || 0,
-            incorrect: item.incorrect || 0,
-            skipped: item.skipped || 0,
-            total: (item.correct || 0) + (item.incorrect || 0) + (item.skipped || 0)
-          }));
-          console.log('Dashboard - Converted history:', history);
-          const data = processQuizHistory(history, period);
-          console.log('Dashboard - Processed data:', data);
-          setPerformanceData(data);
-        } else {
-          console.log('Dashboard - No history found, checking for stats');
-          // If no history but we have stats, create a summary entry
-          if (dashboardData && (dashboardData.totalCorrect > 0 || dashboardData.totalIncorrect > 0 || dashboardData.totalSkipped > 0)) {
-            console.log('Dashboard - Creating summary from stats:', {
-              totalCorrect: dashboardData.totalCorrect,
-              totalIncorrect: dashboardData.totalIncorrect,
-              totalSkipped: dashboardData.totalSkipped
-            });
-            const summaryHistory: QuizResult[] = [{
-              date: new Date().toISOString(),
-              correct: dashboardData.totalCorrect || 0,
-              incorrect: dashboardData.totalIncorrect || 0,
-              skipped: dashboardData.totalSkipped || 0,
-              total: (dashboardData.totalCorrect || 0) + (dashboardData.totalIncorrect || 0) + (dashboardData.totalSkipped || 0)
-            }];
-            console.log('Dashboard - Summary history:', summaryHistory);
-            const data = processQuizHistory(summaryHistory, period);
-            console.log('Dashboard - Processed summary data:', data);
-            setPerformanceData(data);
-          } else {
-            console.log('Dashboard - No data available');
-            // No data available
-            setPerformanceData({
-              totalQuizzes: 0,
-              totalCorrect: 0,
-              totalIncorrect: 0,
-              totalSkipped: 0,
-              overallPercent: 0,
-              history: []
-            });
-          }
-        }
+        console.log('dashboardData', dashboardData);
+        console.log('dashboardData?.progress?.[0]?.stats.totalQuestions', dashboardData?.progress?.[0]?.stats.totalQuestions);
+        setPerformanceData(dashboardData.progress);
       }
     } catch (e) {
-      console.error('Failed to load quiz history.', e);
-      setPerformanceData({
-        totalQuizzes: 0,
-        totalCorrect: 0,
-        totalIncorrect: 0,
-        totalSkipped: 0,
-        overallPercent: 0,
-        history: []
-      });
+      setPerformanceData(null);
     } finally {
       setLoading(false);
     }
   }, [user?.uid, period]);
 
+  const loadTodayData = useCallback(async () => {
+    if (user?.uid) {
+      try {
+        const dashboardData = await apiService.getDashboardData(user.uid);
+        if (dashboardData.progress && dashboardData.progress.length > 0) {
+          // Find daily progress (first element is daily)
+          const dailyProgress = dashboardData.progress.find((p: any) => p.period === 'daily');
+          if (dailyProgress) {
+            setTodayData(dailyProgress);
+          }
+        }
+      } catch (error) {
+        // Error loading today's data
+      }
+    }
+  }, [user?.uid]);
+
   useEffect(() => {
     loadHistory();
-  }, [period]); // Only depend on period, not the function
+  }, [period]); // Reload when period changes
 
-  const processQuizHistory = (history: QuizResult[], selectedPeriod: Period): PerformanceData => {
-    let filteredHistory = history;
+  useEffect(() => {
+    loadTodayData();
+  }, []);
 
-    if (selectedPeriod !== 'all' && selectedPeriod !== 'day') {
-      const now = new Date();
-      let startDate = new Date();
+ 
 
-      if (selectedPeriod === 'week') {
-        startDate = new Date(now.setDate(now.getDate() - 7));
-      } else if (selectedPeriod === 'month') {
-        startDate = new Date(now.setMonth(now.getMonth() - 1));
-      } else if (selectedPeriod === 'year') {
-        startDate = new Date(now.setFullYear(now.getFullYear() - 1));
-      }
-      
-      filteredHistory = history.filter(item => new Date(item.date) >= startDate);
-    }
-
-    const totalQuizzes = filteredHistory.length;
-    const totalCorrect = filteredHistory.reduce((acc, item) => acc + item.correct, 0);
-    const totalIncorrect = filteredHistory.reduce((acc, item) => acc + item.incorrect, 0);
-    const totalSkipped = filteredHistory.reduce((acc, item) => acc + item.skipped, 0);
-    const grandTotal = totalCorrect + totalIncorrect + totalSkipped;
-    const overallPercent = grandTotal > 0 ? (totalCorrect / grandTotal) * 100 : 0;
-
-    let processedHistory: (ProcessedHistoryItem | DailySummaryItem)[];
-
-    if (selectedPeriod === 'day') {
-      // For day period, show only one activity entry with current day's totals
-      const today = new Date().toLocaleDateString('en-US', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      });
-      
-      const totalAnswered = totalCorrect + totalIncorrect;
-      const isActive = totalAnswered > 0;
-      const percent = isActive ? (totalCorrect / totalAnswered) * 100 : 0;
-      const color = isActive ? (percent >= 80 ? '#4CAF50' : percent >= 60 ? '#FFC107' : '#F44336') : '#ccc';
-      
-      processedHistory = [{
-        day: today,
-        date: new Date().toISOString(),
-        correct: totalCorrect,
-        incorrect: totalIncorrect,
-        skipped: totalSkipped,
-        total: grandTotal,
-        percent,
-        color,
-        isActive
-      }];
-    } else {
-      // For other periods, show all history items as before
-      processedHistory = filteredHistory.map(item => {
-        const totalAnswered = item.correct + item.incorrect;
-        const isActive = totalAnswered > 0;
-        const percent = isActive ? (item.correct / totalAnswered) * 100 : 0;
-        const color = isActive ? (percent >= 80 ? '#4CAF50' : percent >= 60 ? '#FFC107' : '#F44336') : '#ccc';
-        return { ...item, percent, color, isActive };
-      }).reverse();
-    }
-
-    return { totalQuizzes, totalCorrect, totalIncorrect, totalSkipped, overallPercent, history: processedHistory };
-  };
-
-  const formatTime = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = seconds % 60;
-
-    if (hours > 0) {
-      return `${hours}h ${minutes}m ${remainingSeconds}s`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${remainingSeconds}s`;
-    } else {
-      return `${remainingSeconds}s`;
-    }
-  };
 
   const PeriodButton = ({ p, label }: { p: Period; label: string }) => (
     <button
       style={{
         border: period === p ? '3px solid #2563EB' : '3px solid #E0E0E0',
         borderRadius: '20px',
-        padding: '12px 16px',
+        padding: 'clamp(8px, 1.5vw, 12px) clamp(12px, 2vw, 16px)',
         backgroundColor: period === p ? '#2563EB' : '#FFFFFF',
         color: period === p ? '#FFFFFF' : '#666666',
-        fontSize: '16px',
+        fontSize: 'clamp(12px, 1.5vw, 16px)',
         fontWeight: period === p ? 'bold' : '600',
         cursor: 'pointer',
-        minWidth: '80px',
-        textTransform: 'capitalize'
+        minWidth: 'clamp(60px, 8vw, 80px)',
+        textTransform: 'capitalize',
+        whiteSpace: 'nowrap'
       }}
       onClick={() => setPeriod(p)}
     >
@@ -235,21 +125,26 @@ function DashboardScreen() {
     </button>
   );
 
-  const renderHistoryItem = (item: ProcessedHistoryItem | DailySummaryItem, index: number) => {
-    const key = 'day' in item ? `${item.day}-${index}` : `${item.date}-${index}`;
-    const title = 'day' in item ? item.day : new Date(item.date).toLocaleString();
-    const stats = `Correct: ${item.correct}, Incorrect: ${item.incorrect}, Skipped: ${item.skipped}`;
-    
+  const renderHistoryItem = (item: any, index: number) => {
+    const tble = ['daily', 'weekly', 'monthly', 'yearly', 'all'];
+    console.log('item', item);
+    console.log('index', index);
+    const key = tble[index];
+    const title = tble[index];
+    const stats = `Correct: ${item.stats.correctAnswers}, Incorrect: ${item.stats.incorrectAnswers}, Skipped: ${item.stats.skippedAnswers}`;
+    console.log('stats', stats);
     return (
       <div key={key} style={{
         display: 'flex',
         alignItems: 'center',
-        padding: '16px 0',
-        borderBottom: '2px solid #E0E0E0'
+        padding: 'clamp(12px, 2vw, 16px) 0',
+        borderBottom: '2px solid #E0E0E0',
+        flexWrap: 'wrap',
+        gap: 'clamp(8px, 1.5vw, 12px)'
       }}>
         <div style={{
-          width: '60px',
-          height: '60px',
+          width: 'clamp(50px, 8vw, 60px)',
+          height: 'clamp(50px, 8vw, 60px)',
           borderRadius: '50%',
           backgroundColor: item.color,
           display: 'flex',
@@ -257,20 +152,29 @@ function DashboardScreen() {
           justifyContent: 'center',
           color: '#FFFFFF',
           fontWeight: 'bold',
-          fontSize: '14px'
+          fontSize: 'clamp(11px, 1.2vw, 14px)',
+          flexShrink: 0
         }}>
-          {item.percent.toFixed(0)}%
+          {(item.percent || 0).toFixed(0)}%
         </div>
-        <div style={{ marginLeft: '20px', flex: 1 }}>
+        <div style={{ 
+          marginLeft: 'clamp(12px, 2vw, 20px)', 
+          flex: 1,
+          minWidth: '200px'
+        }}>
           <div style={{ 
             fontWeight: 'day' in item ? 'bold' : '600',
             color: '#1A1A1A',
             marginBottom: '4px',
-            fontSize: '18px'
+            fontSize: 'clamp(14px, 2vw, 18px)'
           }}>
             {title}
           </div>
-          <div style={{ color: '#666666', fontSize: '16px' }}>
+          <div style={{ 
+            color: '#666666', 
+            fontSize: 'clamp(12px, 1.5vw, 16px)',
+            wordBreak: 'break-word'
+          }}>
             {stats}
           </div>
         </div>
@@ -278,7 +182,7 @@ function DashboardScreen() {
     );
   };
 
-  if (loading || progressLoading) {
+  if (loading) {
     return (
       <div style={{
         display: 'flex',
@@ -286,9 +190,15 @@ function DashboardScreen() {
         justifyContent: 'center',
         alignItems: 'center',
         height: '100vh',
+        width: '100vw',
         backgroundColor: '#F8FAFC'
       }}>
-        <div style={{ fontSize: '18px', color: '#666666', marginTop: '16px', fontWeight: '500' }}>
+        <div style={{ 
+          fontSize: 'clamp(16px, 2vw, 18px)', 
+          color: '#666666', 
+          marginTop: '16px', 
+          fontWeight: '500' 
+        }}>
           Loading your progress...
         </div>
       </div>
@@ -296,16 +206,29 @@ function DashboardScreen() {
   }
 
   return (
-    <div style={{ width: '100%', minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
-      <div style={{ padding: '24px', width: '100%', maxWidth: '100%', margin: '0 auto' }}>
+    <div style={{ 
+      width: '100%', 
+      minHeight: '100vh', 
+      backgroundColor: '#F8FAFC',
+      padding: 'clamp(12px, 2vw, 24px)',
+      boxSizing: 'border-box'
+    }}>
+      <div style={{ 
+        width: '100%', 
+        maxWidth: '1200px', 
+        margin: '0 auto',
+        padding: '0 clamp(8px, 2vw, 16px)'
+      }}>
         <div style={{ 
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center',
-          marginBottom: '24px'
+          marginBottom: 'clamp(16px, 3vw, 24px)',
+          flexWrap: 'wrap',
+          gap: 'clamp(8px, 1.5vw, 12px)'
         }}>
           <h1 style={{ 
-            fontSize: '32px', 
+            fontSize: 'clamp(24px, 4vw, 32px)', 
             fontWeight: 'bold', 
             color: '#1A1A1A',
             letterSpacing: '0.5px',
@@ -316,176 +239,125 @@ function DashboardScreen() {
           
         </div>
         
-        {todayProgress && (
+        {(todayData || liveTotal > 0) && (
           <div style={{
             backgroundColor: '#FFFFFF',
-            padding: '24px',
+            padding: 'clamp(16px, 3vw, 24px)',
             borderRadius: '12px',
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            marginBottom: '24px'
+            marginBottom: 'clamp(16px, 3vw, 24px)'
           }}>
             <h3 style={{ 
-              fontSize: '20px', 
+              fontSize: 'clamp(16px, 2.5vw, 20px)', 
               fontWeight: 'bold', 
-              marginBottom: '16px',
+              marginBottom: 'clamp(12px, 2vw, 16px)',
               color: '#1F2937'
             }}>
               Today's Live Progress
             </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '16px' }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#10B981' }}>{liveCorrect}</div>
-                <div style={{ fontSize: '14px', color: '#6B7280' }}>Correct</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#F59E0B' }}>{liveIncorrect}</div>
-                <div style={{ fontSize: '14px', color: '#6B7280' }}>Incorrect</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#6B7280' }}>{liveSkipped}</div>
-                <div style={{ fontSize: '14px', color: '#6B7280' }}>Skipped</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '24px', fontWeight: 'bold', color: livePerformanceColor }}>{liveTotal}</div>
-                <div style={{ fontSize: '14px', color: '#6B7280' }}>Total</div>
-              </div>
+            <div style={{
+              textAlign: 'center',
+              marginBottom: 'clamp(12px, 2vw, 16px)',
+              fontSize: 'clamp(14px, 2vw, 16px)',
+              color: '#6B7280'
+            }}>
+              {performanceData?.[0].stats.totalQuestions > 0 ? '' : 'No questions answered yet'}
             </div>
-            <div style={{ marginTop: '16px', textAlign: 'center' }}>
-              <div style={{ 
-                fontSize: '18px', 
-                fontWeight: 'bold', 
-                color: livePerformanceColor 
-              }}>
-                {livePercent.toFixed(1)}% Accuracy
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', 
+              gap: 'clamp(8px, 2vw, 16px)',
+              maxWidth: '100%'
+            }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ 
+                  fontSize: 'clamp(18px, 3vw, 24px)', 
+                  fontWeight: 'bold', 
+                  color: '#10B981' 
+                }}>
+                  {performanceData?.[0]?.stats?.correctAnswers}
+                </div>  
+                <div style={{ 
+                  fontSize: 'clamp(11px, 1.2vw, 14px)', 
+                  color: '#6B7280' 
+                }}>
+                  Correct
+                </div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ 
+                  fontSize: 'clamp(18px, 3vw, 24px)', 
+                  fontWeight: 'bold', 
+                  color: '#F59E0B' 
+                }}>
+                  {performanceData?.[0]?.stats.incorrectAnswers}
+                </div>
+                <div style={{ 
+                  fontSize: 'clamp(11px, 1.2vw, 14px)', 
+                  color: '#6B7280' 
+                }}>
+                  Incorrect
+                </div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ 
+                  fontSize: 'clamp(18px, 3vw, 24px)', 
+                  fontWeight: 'bold', 
+                  color: '#6B7280' 
+                }}>
+                  {performanceData?.[0]?.stats.skippedAnswers}
+                </div>
+                <div style={{ 
+                  fontSize: 'clamp(11px, 1.2vw, 14px)', 
+                  color: '#6B7280' 
+                }}>
+                  Skipped
+                </div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ 
+                  fontSize: 'clamp(18px, 3vw, 24px)', 
+                  fontWeight: 'bold', 
+                  color: livePerformanceColor 
+                }}>
+                  {performanceData?.[0]?.stats.totalQuestions}
+                </div>
+                <div style={{ 
+                  fontSize: 'clamp(11px, 1.2vw, 14px)', 
+                  color: '#6B7280' 
+                }}>
+                  Total
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {userProgress && userProgress.overallStats && (
-          <div style={{
-            backgroundColor: '#FFFFFF',
-            padding: '24px',
-            borderRadius: '20px',
-            marginBottom: '24px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-          }}>
-            <h2 style={{ 
-              fontSize: '24px', 
-              fontWeight: 'bold', 
-              marginBottom: '20px',
-              color: '#1A1A1A',
-              letterSpacing: '0.5px',
-              margin: '0 0 20px 0'
-            }}>
-              Overall Progress
-            </h2>
-            <div style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              justifyContent: 'space-between',
-              marginBottom: '24px',
-              gap: '16px'
-            }}>
-              <div style={{
-                flex: 1,
-                minWidth: '45%',
-                textAlign: 'center',
-                padding: '16px',
-                backgroundColor: '#F8FAFC',
-                borderRadius: '16px',
-                border: '2px solid #E0E0E0'
-              }}>
-                <div style={{ fontSize: '14px', fontWeight: '600', color: '#666666', marginBottom: '4px' }}>
-                  Total Quizzes
-                </div>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2563EB' }}>
-                  {userProgress.overallStats.totalQuizzesTaken || 0}
-                </div>
-              </div>
-              <div style={{
-                flex: 1,
-                minWidth: '45%',
-                textAlign: 'center',
-                padding: '16px',
-                backgroundColor: '#F8FAFC',
-                borderRadius: '16px',
-                border: '2px solid #E0E0E0'
-              }}>
-                <div style={{ fontSize: '14px', fontWeight: '600', color: '#666666', marginBottom: '4px' }}>
-                  Overall Accuracy
-                </div>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#4CAF50' }}>
-                  {(userProgress.overallStats.overallAccuracy || 0).toFixed(1)}%
-                </div>
-              </div>
-              <div style={{
-                flex: 1,
-                minWidth: '45%',
-                textAlign: 'center',
-                padding: '16px',
-                backgroundColor: '#F8FAFC',
-                borderRadius: '16px',
-                border: '2px solid #E0E0E0'
-              }}>
-                <div style={{ fontSize: '14px', fontWeight: '600', color: '#666666', marginBottom: '4px' }}>
-                  Current Streak
-                </div>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#FF9800' }}>
-                  {userProgress.overallStats.currentStreak || 0} days
-                </div>
-              </div>
-              <div style={{
-                flex: 1,
-                minWidth: '45%',
-                textAlign: 'center',
-                padding: '16px',
-                backgroundColor: '#F8FAFC',
-                borderRadius: '16px',
-                border: '2px solid #E0E0E0'
-              }}>
-                <div style={{ fontSize: '14px', fontWeight: '600', color: '#666666', marginBottom: '4px' }}>
-                  Best Score
-                </div>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#9C27B0' }}>
-                  {(userProgress.overallStats.bestQuizScore || 0).toFixed(1)}%
-                </div>
-              </div>
-            </div>
-            <div style={{ marginTop: '8px' }}>
-              <div style={{ fontSize: '18px', fontWeight: '600', color: '#1A1A1A', marginBottom: '8px' }}>
-                Total Questions: {userProgress.overallStats.totalQuestionsAnswered || 0}
-              </div>
-              <div style={{ fontSize: '18px', fontWeight: '600', color: '#1A1A1A', marginBottom: '8px' }}>
-                Total Time: {formatTime(userProgress.overallStats.totalTimeSpent || 0)}
-              </div>
-            </div>
-          </div>
-        )}
+
 
         <div style={{
           backgroundColor: '#FFFFFF',
-          padding: '24px',
+          padding: 'clamp(16px, 3vw, 24px)',
           borderRadius: '20px',
-          marginBottom: '24px',
+          marginBottom: 'clamp(16px, 3vw, 24px)',
           boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
         }}>
           <h2 style={{ 
-            fontSize: '24px', 
+            fontSize: 'clamp(18px, 3vw, 24px)', 
             fontWeight: 'bold', 
-            marginBottom: '20px',
+            marginBottom: 'clamp(12px, 2vw, 20px)',
             color: '#1A1A1A',
             letterSpacing: '0.5px',
-            margin: '0 0 20px 0'
+            margin: '0 0 clamp(12px, 2vw, 20px) 0'
           }}>
             Your History
           </h2>
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
-            marginBottom: '24px',
+            marginBottom: 'clamp(16px, 3vw, 24px)',
             flexWrap: 'wrap',
-            gap: '8px'
+            gap: 'clamp(6px, 1vw, 8px)'
           }}>
             <PeriodButton p="day" label="Day" />
             <PeriodButton p="week" label="Week" />
@@ -494,121 +366,207 @@ function DashboardScreen() {
             <PeriodButton p="all" label="All Time" />
           </div>
 
-          {performanceData && performanceData.history.length > 0 ? (
-            <>
+                    {/* Always show the stats cards */}
+          {loading ? (
+            <div style={{
+              textAlign: 'center',
+              padding: 'clamp(32px, 6vw, 48px)',
+              color: '#666666',
+              fontSize: 'clamp(14px, 2vw, 16px)'
+            }}>
+              Loading {period} data...
+            </div>
+          ) : performanceData ? (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: 'clamp(16px, 2.5vw, 20px)',
+              marginBottom: 'clamp(20px, 3vw, 28px)'
+            }}>
               <div style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                justifyContent: 'space-between',
-                marginBottom: '24px',
-                gap: '16px'
+                textAlign: 'center',
+                padding: 'clamp(16px, 2.5vw, 20px)',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                borderRadius: '20px',
+                border: 'none',
+                boxShadow: '0 8px 25px rgba(102, 126, 234, 0.3)',
+                position: 'relative',
+                overflow: 'hidden'
               }}>
-                <div style={{
-                  flex: 1,
-                  minWidth: '45%',
-                  textAlign: 'center',
-                  padding: '16px',
-                  backgroundColor: '#F8FAFC',
-                  borderRadius: '16px',
-                  border: '2px solid #E0E0E0'
+                <div style={{ 
+                  fontSize: 'clamp(12px, 1.3vw, 15px)', 
+                  fontWeight: '600', 
+                  color: '#FFFFFF', 
+                  marginBottom: '8px',
+                  textShadow: '0 1px 2px rgba(0,0,0,0.1)'
                 }}>
-                  <div style={{ fontSize: '14px', fontWeight: '600', color: '#666666', marginBottom: '4px' }}>
-                    Average Score
-                  </div>
-                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#4CAF50' }}>
-                    {performanceData.overallPercent.toFixed(0)}%
-                  </div>
+                  Accuracy Rate
+                </div>
+                <div style={{ 
+                  fontSize: 'clamp(24px, 4vw, 32px)', 
+                  fontWeight: 'bold', 
+                  color: '#FFFFFF',
+                  textShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                }}>
+                  {(() => {
+                    const index = getPeriodIndex(period);
+                    const correct = performanceData?.[index]?.stats.correctAnswers || 0;
+                    const incorrect = performanceData?.[index]?.stats.incorrectAnswers || 0;
+                    const skipped = performanceData?.[index]?.stats.skippedAnswers || 0;
+                    const total = correct + incorrect + skipped;
+                    return total > 0 ? ((correct / total) * 100).toFixed(1) : '0.0';
+                  })()}%
                 </div>
                 <div style={{
-                  flex: 1,
-                  minWidth: '45%',
-                  textAlign: 'center',
-                  padding: '16px',
-                  backgroundColor: '#F8FAFC',
-                  borderRadius: '16px',
-                  border: '2px solid #E0E0E0'
-                }}>
-                  <div style={{ fontSize: '14px', fontWeight: '600', color: '#666666', marginBottom: '4px' }}>
-                    Total Correct
-                  </div>
-                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#4CAF50' }}>
-                    {performanceData.totalCorrect}
-                  </div>
-                </div>
-                <div style={{
-                  flex: 1,
-                  minWidth: '45%',
-                  textAlign: 'center',
-                  padding: '16px',
-                  backgroundColor: '#F8FAFC',
-                  borderRadius: '16px',
-                  border: '2px solid #E0E0E0'
-                }}>
-                  <div style={{ fontSize: '14px', fontWeight: '600', color: '#666666', marginBottom: '4px' }}>
-                    Total Incorrect
-                  </div>
-                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#F44336' }}>
-                    {performanceData.totalIncorrect}
-                  </div>
-                </div>
-                <div style={{
-                  flex: 1,
-                  minWidth: '45%',
-                  textAlign: 'center',
-                  padding: '16px',
-                  backgroundColor: '#F8FAFC',
-                  borderRadius: '16px',
-                  border: '2px solid #E0E0E0'
-                }}>
-                  <div style={{ fontSize: '14px', fontWeight: '600', color: '#666666', marginBottom: '4px' }}>
-                    Total Skipped
-                  </div>
-                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#FFC107' }}>
-                    {performanceData.totalSkipped}
-                  </div>
-                </div>
+                  position: 'absolute',
+                  top: '-20px',
+                  right: '-20px',
+                  width: '60px',
+                  height: '60px',
+                  background: 'rgba(255,255,255,0.1)',
+                  borderRadius: '50%'
+                }} />
               </div>
               
-              <h3 style={{
-                fontSize: '20px',
-                fontWeight: 'bold',
-                color: '#1A1A1A',
-                marginBottom: '16px',
-                letterSpacing: '0.5px'
+              <div style={{
+                textAlign: 'center',
+                padding: 'clamp(16px, 2.5vw, 20px)',
+                background: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)',
+                borderRadius: '20px',
+                border: 'none',
+                boxShadow: '0 8px 25px rgba(76, 175, 80, 0.3)',
+                position: 'relative',
+                overflow: 'hidden'
               }}>
-                Recent Activity
-              </h3>
+                <div style={{ 
+                  fontSize: 'clamp(12px, 1.3vw, 15px)', 
+                  fontWeight: '600', 
+                  color: '#FFFFFF', 
+                  marginBottom: '8px',
+                  textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                }}>
+                  Correct Answers
+                </div>
+                <div style={{ 
+                  fontSize: 'clamp(24px, 4vw, 32px)', 
+                  fontWeight: 'bold', 
+                  color: '#FFFFFF',
+                  textShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                }}>
+                  {performanceData?.[getPeriodIndex(period)]?.stats.correctAnswers || 0}
+                </div>
+                <div style={{
+                  position: 'absolute',
+                  top: '-15px',
+                  right: '-15px',
+                  width: '50px',
+                  height: '50px',
+                  background: 'rgba(255,255,255,0.1)',
+                  borderRadius: '50%'
+                }} />
+              </div>
               
               <div style={{
-                backgroundColor: '#F8FAFC',
-                borderRadius: '16px',
-                padding: '16px'
+                textAlign: 'center',
+                padding: 'clamp(16px, 2.5vw, 20px)',
+                background: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
+                borderRadius: '20px',
+                border: 'none',
+                boxShadow: '0 8px 25px rgba(255, 152, 0, 0.3)',
+                position: 'relative',
+                overflow: 'hidden'
               }}>
-                {performanceData.history.map(renderHistoryItem)}
+                <div style={{ 
+                  fontSize: 'clamp(12px, 1.3vw, 15px)', 
+                  fontWeight: '600', 
+                  color: '#FFFFFF', 
+                  marginBottom: '8px',
+                  textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                }}>
+                  Incorrect Answers
+                </div>
+                <div style={{ 
+                  fontSize: 'clamp(24px, 4vw, 32px)', 
+                  fontWeight: 'bold', 
+                  color: '#FFFFFF',
+                  textShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                }}>
+                  {performanceData?.[getPeriodIndex(period)]?.stats.incorrectAnswers || 0}
+                </div>
+                <div style={{
+                  position: 'absolute',
+                  top: '-15px',
+                  right: '-15px',
+                  width: '50px',
+                  height: '50px',
+                  background: 'rgba(255,255,255,0.1)',
+                  borderRadius: '50%'
+                }} />
               </div>
-            </>
+              
+              <div style={{
+                textAlign: 'center',
+                padding: 'clamp(16px, 2.5vw, 20px)',
+                background: 'linear-gradient(135deg, #9E9E9E 0%, #757575 100%)',
+                borderRadius: '20px',
+                border: 'none',
+                boxShadow: '0 8px 25px rgba(158, 158, 158, 0.3)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                <div style={{ 
+                  fontSize: 'clamp(12px, 1.3vw, 15px)', 
+                  fontWeight: '600', 
+                  color: '#FFFFFF', 
+                  marginBottom: '8px',
+                  textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                }}>
+                  Skipped Questions
+                </div>
+                <div style={{ 
+                  fontSize: 'clamp(24px, 4vw, 32px)', 
+                  fontWeight: 'bold', 
+                  color: '#FFFFFF',
+                  textShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                }}>
+                  {performanceData?.[getPeriodIndex(period)]?.stats.skippedAnswers || 0}
+                </div>
+                <div style={{
+                  position: 'absolute',
+                  top: '-15px',
+                  right: '-15px',
+                  width: '50px',
+                  height: '50px',
+                  background: 'rgba(255,255,255,0.1)',
+                  borderRadius: '50%'
+                }} />
+              </div>
+            </div>
+          ) : null}
+
+          {/* Show history if available, otherwise show message */}
+          {/* {performanceData && performanceData.length > 0 ? (
+            <div style={{
+              maxHeight: '400px',
+              overflowY: 'auto',
+              border: '1px solid #E0E0E0',
+              borderRadius: '12px',
+              padding: 'clamp(8px, 1.5vw, 12px)'
+            }}>
+              {performanceData.map((item, index) => renderHistoryItem(item, index))}
+            </div>
           ) : (
             <div style={{
               textAlign: 'center',
-              padding: '40px 0'
+              padding: 'clamp(32px, 6vw, 48px)',
+              color: '#666666',
+              fontSize: 'clamp(14px, 2vw, 16px)'
             }}>
-              <div style={{ 
-                fontSize: '20px', 
-                color: '#666666', 
-                marginBottom: '8px',
-                fontWeight: '600'
-              }}>
-                No quiz data available for this period.
-              </div>
-              <div style={{
-                fontSize: '16px',
-                color: '#888888',
-                fontStyle: 'italic'
-              }}>
-                Start taking quizzes to see your progress here!
-              </div>
+              {performanceData && (performanceData?.[0]?.correctAnswers > 0 || performanceData?.[0]?.incorrectAnswers > 0 || performanceData?.[0]?.skippedAnswers > 0) 
+                ? `No detailed history available for this ${period} period, but you can see your overall performance above.` 
+                : `No data available for this ${period} period. Start taking quizzes to see your progress!`}
             </div>
-          )}
+          )} */}
         </div>
       </div>
     </div>

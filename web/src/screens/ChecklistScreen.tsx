@@ -51,11 +51,6 @@ const ChecklistScreen = () => {
   // Function to save daily stats to backend
   const saveDailyStatsToBackend = async () => {
     if (!user?.uid || !dailyData || dailyData.questionsAnswered === 0) {
-      console.log('Skipping save - missing required data:', {
-        hasUser: !!user?.uid,
-        hasDailyData: !!dailyData,
-        questionsAnswered: dailyData?.questionsAnswered
-      });
       return;
     }
     
@@ -81,9 +76,7 @@ const ChecklistScreen = () => {
         incorrect: dailyData.incorrect,
         skipped: dailyData.skipped
       });
-      console.log('Daily stats saved to backend on navigation:', dailyData);
     } catch (error) {
-      console.error('Error saving daily stats on navigation:', error);
       // Don't throw the error to prevent the app from crashing
     }
   };
@@ -170,13 +163,12 @@ const ChecklistScreen = () => {
               setCurrentQuestionIndex(todayProgress.currentQuestionIndex);
               setCurrentQuestion(todayProgress.quizQuestions[todayProgress.currentQuestionIndex]);
               setScreen('quiz');
-              console.log('Resumed quiz from question', todayProgress.currentQuestionIndex + 1);
             }
           }
         }
       }
     } catch (error) {
-      console.error('Error loading saved quiz state:', error);
+      // Error loading saved quiz state
     }
   };
 
@@ -212,7 +204,6 @@ const ChecklistScreen = () => {
         }
       }
     } catch (error) {
-      console.error('Error loading daily quiz data:', error);
       // Keep the initialized dailyData even if API fails
     }
   };
@@ -220,12 +211,10 @@ const ChecklistScreen = () => {
   const loadTracks = async () => {
     // Prevent multiple simultaneous API calls
     if (isLoadingTracks) {
-      console.log('Tracks already loading, skipping...');
       return;
     }
     
     try {
-      console.log('Loading tracks...');
       setIsLoadingTracks(true);
       setLoading(true);
       
@@ -234,7 +223,6 @@ const ChecklistScreen = () => {
       const cachedTracks = localStorage.getItem(`cached_tracks_${today}`);
       
       if (cachedTracks) {
-        console.log('Using cached tracks from today');
         const tracks = JSON.parse(cachedTracks);
         
         // Check if cached tracks have previewUrl values
@@ -246,8 +234,7 @@ const ChecklistScreen = () => {
           setIsLoadingTracks(false);
           return;
         } else {
-          console.log('Cached tracks missing previewUrl values, using fallback tracks');
-          localStorage.removeItem(`cached_tracks_${today}`); // Clear invalid cache
+          localStorage.removeItem(`cachedTracks_${today}`); // Clear invalid cache
         }
       }
       
@@ -255,7 +242,6 @@ const ChecklistScreen = () => {
       const lastRateLimit = localStorage.getItem('last_rate_limit');
       const now = Date.now();
       if (lastRateLimit && (now - parseInt(lastRateLimit)) < 60000) { // 1 minute cooldown
-        console.log('Rate limit cooldown active, using fallback tracks');
         useFallbackTracks();
         setIsLoadingTracks(false);
         return;
@@ -266,7 +252,6 @@ const ChecklistScreen = () => {
       
       if (!response.ok) {
         if (response.status === 429) {
-          console.error('Rate limited by iTunes API. Using fallback tracks.');
           localStorage.setItem('last_rate_limit', now.toString());
           useFallbackTracks();
           setIsLoadingTracks(false);
@@ -276,8 +261,6 @@ const ChecklistScreen = () => {
       }
       
       const data = await response.json();
-      console.log('Tracks response:', data);
-      console.log('Tracks count:', data.results?.length || 0);
       
       if (data.results && data.results.length > 0) {
         // Check if iTunes tracks have previewUrl values
@@ -290,15 +273,12 @@ const ChecklistScreen = () => {
           // Cache the tracks for today
           localStorage.setItem(`cached_tracks_${today}`, JSON.stringify(tracksWithPreviewUrls));
         } else {
-          console.log('iTunes tracks missing previewUrl values, using fallback tracks');
           useFallbackTracks();
         }
       } else {
-        console.error('No tracks returned from iTunes API');
         useFallbackTracks();
       }
     } catch (error) {
-      console.error('Error loading tracks:', error);
       useFallbackTracks();
     } finally {
       setLoading(false);
@@ -311,7 +291,6 @@ const ChecklistScreen = () => {
     const today = new Date().toISOString().split('T')[0];
     localStorage.removeItem(`cached_tracks_${today}`);
     localStorage.removeItem('last_rate_limit');
-    console.log('Cache cleared, will load fresh tracks');
     loadTracks();
   };
 
@@ -340,17 +319,13 @@ const ChecklistScreen = () => {
       { trackId: 19, trackName: "Graveyard", artistName: "Halsey", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" },
       { trackId: 20, trackName: "Don't Call Me Up", artistName: "Mabel", previewUrl: "https://audio-samples.github.io/samples/mp3/blizzard_biased/blizzard_biased.mp3", artworkUrl100: "" }
     ];
-    console.log('Using fallback tracks with previewUrl values:', fallbackTracks.map(t => ({ name: t.trackName, previewUrl: t.previewUrl })));
     setTracks(fallbackTracks);
     // Cache the fallback tracks
     localStorage.setItem(`cached_tracks_${today}`, JSON.stringify(fallbackTracks));
   };
 
   const generateQuizQuestions = (): Question[] => {
-    console.log('generateQuizQuestions called with tracks:', tracks.length);
-    console.log('Sample tracks with previewUrl:', tracks.slice(0, 3).map(t => ({ name: t.trackName, previewUrl: t.previewUrl })));
     const shuffledTracks = [...tracks].sort(() => Math.random() - 0.5);
-    console.log('Shuffled tracks length:', shuffledTracks.length);
     
     const questions = shuffledTracks.slice(0, 10).map((track, index) => {
       const otherTracks = shuffledTracks.filter(t => t.trackId !== track.trackId);
@@ -398,9 +373,6 @@ const ChecklistScreen = () => {
             !areSimilarTitles(track.trackName, randomTrack.trackName)) {
           options.push(randomTrack.trackName);
         } else {
-          if (randomTrack) {
-            console.log(`Filtered out similar option: "${randomTrack.trackName}" for correct answer: "${track.trackName}"`);
-          }
           attempts++;
           i--; // Retry this iteration
         }
@@ -428,17 +400,11 @@ const ChecklistScreen = () => {
       };
     });
     
-    console.log('Generated questions:', questions.length);
     return questions;
   };
 
   const handleStartQuiz = async () => {
-    console.log('handleStartQuiz called');
-    console.log('dailyData:', dailyData);
-    console.log('tracks length:', tracks.length);
-    
     const quizQuestions = generateQuizQuestions();
-    console.log('Generated questions:', quizQuestions.length);
     
     if (quizQuestions.length === 0) {
       alert('No tracks available for quiz. Please try again.');
@@ -449,7 +415,6 @@ const ChecklistScreen = () => {
     setCurrentQuestionIndex(0);
     setCurrentQuestion(quizQuestions[0]);
     setScreen('quiz');
-    console.log('Screen set to quiz');
 
     // Save quiz state to backend
     if (user?.uid) {
@@ -459,9 +424,9 @@ const ChecklistScreen = () => {
           incorrect: dailyData?.incorrect || 0,
           skipped: dailyData?.skipped || 0
         });
-        console.log('Quiz state saved to backend');
+        
       } catch (error) {
-        console.error('Error saving quiz state:', error);
+        // Error saving quiz state
       }
     }
 
@@ -492,11 +457,7 @@ const ChecklistScreen = () => {
   };
 
   const startQuestion = async () => {
-    console.log('startQuestion called');
-    console.log('currentQuestion:', currentQuestion);
-    
     if (!currentQuestion) {
-      console.log('No current question, returning');
       return;
     }
 
@@ -512,11 +473,9 @@ const ChecklistScreen = () => {
       setIsPlaying(false);
 
       // Create new audio element
-      console.log('Loading audio from URL:', currentQuestion.track.previewUrl);
       
       // Check if previewUrl is empty or invalid
       if (!currentQuestion.track.previewUrl || currentQuestion.track.previewUrl.trim() === '') {
-        console.log('No preview URL available, using fallback timer');
         throw new Error('No preview URL available');
       }
       
@@ -528,7 +487,7 @@ const ChecklistScreen = () => {
       
       // Set up audio event listeners
       audio.addEventListener('loadedmetadata', () => {
-        console.log('Audio loaded, duration:', audio.duration);
+        // Audio loaded
       });
 
       audio.addEventListener('timeupdate', () => {
@@ -536,7 +495,6 @@ const ChecklistScreen = () => {
       });
 
       audio.addEventListener('ended', () => {
-        console.log('Audio ended naturally');
         setIsPlaying(false);
         if (timerRef.current) clearInterval(timerRef.current);
       });
@@ -564,7 +522,6 @@ const ChecklistScreen = () => {
       // Start playing
       await audio.play();
       setIsPlaying(true);
-      console.log('Started playing track:', currentQuestion.track.trackName);
 
       // Auto-stop after 30 seconds (iTunes preview limit)
       autoStopRef.current = setTimeout(() => {
@@ -573,11 +530,9 @@ const ChecklistScreen = () => {
           audioRef.current = null;
         }
         setIsPlaying(false);
-        console.log('Auto-stopped question playback');
       }, 30000);
 
     } catch (error) {
-      console.error('Error playing track:', error);
       // Fallback to timer-based simulation
       const duration = Math.floor(Math.random() * 21) + 10;
       setIsPlaying(true);
@@ -621,7 +576,7 @@ const ChecklistScreen = () => {
         }
       }
     } catch (error) {
-      console.error('Error toggling playback:', error);
+      // Error toggling playback
     }
   };
 
@@ -636,13 +591,12 @@ const ChecklistScreen = () => {
         // Restart timer logic here
       }
     } catch (error) {
-      console.error('Error restarting track:', error);
+      // Error restarting track
     }
   };
 
   const handleVolumeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newVolume = parseFloat(event.target.value);
-    console.log('Volume changed to:', newVolume);
     setVolume(newVolume);
     
     // Update audio volume if audio element exists
@@ -676,12 +630,7 @@ const ChecklistScreen = () => {
   };
 
   const handleAnswer = async (selectedAnswer: string) => {
-    console.log('handleAnswer called with:', selectedAnswer);
-    console.log('currentQuestion:', currentQuestion);
-    console.log('dailyData:', dailyData);
-    
     if (!currentQuestion || !dailyData) {
-      console.log('Early return - missing currentQuestion or dailyData');
       return;
     }
 
@@ -696,8 +645,6 @@ const ChecklistScreen = () => {
 
     const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
     const status: 'unanswered' | 'correct' | 'incorrect' | 'skipped' = selectedAnswer === 'idk' ? 'skipped' : (isCorrect ? 'correct' : 'incorrect');
-
-    console.log('Answer status:', status);
 
     // Update question
     const updatedQuestion = { ...currentQuestion, userAnswer: selectedAnswer, status };
@@ -721,22 +668,18 @@ const ChecklistScreen = () => {
 
     // Update local progress in AuthContext (no API call)
     updateTodayProgress(updatedDailyData.correct, updatedDailyData.incorrect, updatedDailyData.skipped);
-    console.log('Updated today progress in AuthContext:', { 
-      correct: updatedDailyData.correct, 
-      incorrect: updatedDailyData.incorrect, 
-      skipped: updatedDailyData.skipped 
-    });
-
-    // Save quiz state to backend (questions and current index, but not daily stats)
+    
+    // Save quiz state to backend (questions and current index, AND current daily stats)
     if (user?.uid) {
       try {
         await apiService.saveQuizState(user.uid, updatedQuestions, currentQuestionIndex, {
-          correct: 0, // Don't save daily stats here
-          incorrect: 0,
-          skipped: 0
+          correct: updatedDailyData.correct,
+          incorrect: updatedDailyData.incorrect,
+          skipped: updatedDailyData.skipped
         });
+        
       } catch (error) {
-        console.error('Error saving quiz state:', error);
+        // Error saving quiz state
       }
     }
 
@@ -770,22 +713,18 @@ const ChecklistScreen = () => {
 
     // Update local progress in AuthContext (no API call)
     updateTodayProgress(updatedDailyData.correct, updatedDailyData.incorrect, updatedDailyData.skipped);
-    console.log('Updated today progress in AuthContext:', { 
-      correct: updatedDailyData.correct, 
-      incorrect: updatedDailyData.incorrect, 
-      skipped: updatedDailyData.skipped 
-    });
 
-    // Save quiz state to backend (questions and current index, but not daily stats)
+    // Save quiz state to backend (questions and current index, AND current daily stats)
     if (user?.uid) {
       try {
         await apiService.saveQuizState(user.uid, updatedQuestions, currentQuestionIndex, {
-          correct: 0, // Don't save daily stats here
-          incorrect: 0,
-          skipped: 0
+          correct: updatedDailyData.correct,
+          incorrect: updatedDailyData.incorrect,
+          skipped: updatedDailyData.skipped
         });
+        
       } catch (error) {
-        console.error('Error saving quiz state:', error);
+        // Error saving quiz state
       }
     }
 
@@ -793,19 +732,17 @@ const ChecklistScreen = () => {
     showAnswerFeedback('skipped');
   };
 
-  const handleNextQuestion = () => {
-    console.log('handleNextQuestion called');
-    console.log('currentQuestionIndex:', currentQuestionIndex);
-    console.log('questions.length:', questions.length);
+  const handleNextQuestion = async () => {
+    
     
     const nextIndex = currentQuestionIndex + 1;
     
     if (nextIndex >= questions.length) {
-      console.log('Quiz finished, calling finishQuiz');
+      
       // Don't save state here, let finishQuiz handle the final save
       finishQuiz();
     } else {
-      console.log('Moving to next question:', nextIndex);
+      
       setCurrentQuestionIndex(nextIndex);
       setCurrentQuestion(questions[nextIndex]);
       
@@ -817,8 +754,9 @@ const ChecklistScreen = () => {
             incorrect: dailyData?.incorrect || 0,
             skipped: dailyData?.skipped || 0
           });
+          
         } catch (error) {
-          console.error('Error saving quiz state:', error);
+          // Error saving quiz state
         }
       }
       
@@ -828,14 +766,14 @@ const ChecklistScreen = () => {
   };
 
   const finishQuiz = async () => {
-    console.log('finishQuiz called');
+    
     
     // Calculate final stats from the questions array
     const correct = questions.filter(q => q.status === 'correct').length;
     const incorrect = questions.filter(q => q.status === 'incorrect').length;
     const skipped = questions.filter(q => q.status === 'skipped').length;
     
-    console.log('Final stats:', { correct, incorrect, skipped, totalQuestions: questions.length });
+    
     
     // Update daily data with final stats
     const updatedDailyData = {
@@ -856,9 +794,9 @@ const ChecklistScreen = () => {
           incorrect: incorrect,
           skipped: skipped
         });
-        console.log('Final daily stats saved to backend:', { correct, incorrect, skipped });
+        
       } catch (error) {
-        console.error('Error saving final daily stats:', error);
+        // Error saving final daily stats
       }
     }
 
@@ -866,9 +804,9 @@ const ChecklistScreen = () => {
     if (user?.uid) {
       try {
         await apiService.clearQuizState(user.uid);
-        console.log('Quiz state cleared from backend');
+
       } catch (error) {
-        console.error('Error clearing quiz state:', error);
+        // Error clearing quiz state
       }
     }
 
@@ -886,7 +824,7 @@ const ChecklistScreen = () => {
         });
       }
     } catch (error) {
-      console.error('Error updating progress:', error);
+      // Error updating progress
     }
 
     setScreen('results');
@@ -1246,9 +1184,7 @@ const ChecklistScreen = () => {
     );
   };
 
-  console.log('Current screen:', screen);
-  console.log('Current question:', currentQuestion);
-  console.log('Questions length:', questions.length);
+
 
   return (
     <div style={{ width: '100%', minHeight: '100vh', background: '#F8FAFC' }}>
