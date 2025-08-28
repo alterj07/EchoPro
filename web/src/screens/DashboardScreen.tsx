@@ -4,31 +4,9 @@ import apiService from '../services/apiService';
 
 type Period = 'day' | 'week' | 'month' | 'year' | 'all';
 
-type QuizResult = {
-  date: string;
-  correct: number;
-  incorrect: number;
-  skipped: number;
-  total: number;
-};
 
-type ProcessedHistoryItem = QuizResult & {
-  percent: number;
-  color: string;
-  isActive: boolean;
-};
 
-type DailySummaryItem = {
-  day: string;
-  date: string;
-  correct: number;
-  incorrect: number;
-  skipped: number;
-  total: number;
-  percent: number;
-  color: string;
-  isActive: boolean;
-}
+
 
 type PerformanceData = any[];
 
@@ -125,62 +103,7 @@ function DashboardScreen() {
     </button>
   );
 
-  const renderHistoryItem = (item: any, index: number) => {
-    const tble = ['daily', 'weekly', 'monthly', 'yearly', 'all'];
-    console.log('item', item);
-    console.log('index', index);
-    const key = tble[index];
-    const title = tble[index];
-    const stats = `Correct: ${item.stats.correctAnswers}, Incorrect: ${item.stats.incorrectAnswers}, Skipped: ${item.stats.skippedAnswers}`;
-    console.log('stats', stats);
-    return (
-      <div key={key} style={{
-        display: 'flex',
-        alignItems: 'center',
-        padding: 'clamp(12px, 2vw, 16px) 0',
-        borderBottom: '2px solid #E0E0E0',
-        flexWrap: 'wrap',
-        gap: 'clamp(8px, 1.5vw, 12px)'
-      }}>
-        <div style={{
-          width: 'clamp(50px, 8vw, 60px)',
-          height: 'clamp(50px, 8vw, 60px)',
-          borderRadius: '50%',
-          backgroundColor: item.color,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#FFFFFF',
-          fontWeight: 'bold',
-          fontSize: 'clamp(11px, 1.2vw, 14px)',
-          flexShrink: 0
-        }}>
-          {(item.percent || 0).toFixed(0)}%
-        </div>
-        <div style={{ 
-          marginLeft: 'clamp(12px, 2vw, 20px)', 
-          flex: 1,
-          minWidth: '200px'
-        }}>
-          <div style={{ 
-            fontWeight: 'day' in item ? 'bold' : '600',
-            color: '#1A1A1A',
-            marginBottom: '4px',
-            fontSize: 'clamp(14px, 2vw, 18px)'
-          }}>
-            {title}
-          </div>
-          <div style={{ 
-            color: '#666666', 
-            fontSize: 'clamp(12px, 1.5vw, 16px)',
-            wordBreak: 'break-word'
-          }}>
-            {stats}
-          </div>
-        </div>
-      </div>
-    );
-  };
+
 
   if (loading) {
     return (
