@@ -193,8 +193,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Create user in MongoDB with password
       const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      const response = await apiService.createUser(userId, name, email, password); // Pass actual name
-      console.log('User created in MongoDB:', response);
+      await apiService.createUser(userId, name, email, password); // Pass actual name
+      console.log('User created in MongoDB successfully');
       
       // Clear any existing progress data for the new user to ensure fresh start
       try {

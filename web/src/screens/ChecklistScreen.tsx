@@ -541,8 +541,8 @@ const ChecklistScreen = () => {
         if (timerRef.current) clearInterval(timerRef.current);
       });
 
-      audio.addEventListener('error', (e) => {
-        console.error('Audio error:', e);
+      audio.addEventListener('error', () => {
+        console.error('Audio error occurred');
         setIsPlaying(false);
         // Fallback to timer-based simulation if audio fails
         const duration = Math.floor(Math.random() * 21) + 10;
